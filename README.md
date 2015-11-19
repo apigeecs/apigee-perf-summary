@@ -48,6 +48,7 @@ ApigeeCorporation$ node ./summarize-foo.js
 Where summarize-foo.js is a script as outlined above.
 
 Output from the script includes a detailed information and JSON results objects of the form:
+
 	processed 3 files.
 	number of policies: 21
 	statistics by policy type: {
