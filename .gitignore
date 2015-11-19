@@ -1,6 +1,7 @@
 npm-debug.log
 .DS_Store
 edge/*/java/target
+node_modules
 
 *.class
 
@@ -14,6 +15,7 @@ bin
 .classpath
 .project
 .settings
+node_modules
 
 # Dependency directory
 # Commenting this out is preferred by some people, see
