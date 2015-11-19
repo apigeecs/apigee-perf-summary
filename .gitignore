@@ -1,7 +1,6 @@
 npm-debug.log
 .DS_Store
 edge/*/java/target
-node_modules
 
 *.class
 
