@@ -31,8 +31,6 @@ Below list details third Party libraries used in this project and their correspo
 
  Node: "fs": "0.0.2", License Type: MIT, https://www.npmjs.com/package/fs
  Node: "xml2js": "0.4.5", License Type: MIT, https://github.com/Leonidas-from-XIV/node-xml2js
- Node: "jshint": "2.6.0", License Type: MIT, https://github.com/jshint/jshint
- Node: "diff":"1.3.2", License Type: BSD, https://github.com/kpdecker/jsdiff
  Node: "xml-stream":"0.4.5", License Type: Custom, https://github.com/assistunion/xml-stream
  Node: "path": "0.11.14", License Type: MIT, https://github.com/jinder/path
 
