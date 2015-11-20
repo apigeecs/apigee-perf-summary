@@ -14,14 +14,15 @@ var variables = {},
 
 
 print = function(msg) {
-    console.log(msg);
+    if (msg && (typeof msg === 'object')) console.log(JSON.stringify(msg));
+    else console.log(msg);
 };
 
 finish = function() {
     var ct = countKeys(traceResponse.curTraceFile);
     if (ct === 0) {
         //handle post processing
-        var all = (config.output.indexOf('fileCount') > -1);
+        var all = (config.output.indexOf('all') > -1);
 
         if (all || config.output.indexOf('fileCount') > -1) print("processed " + traceResponse.traceFiles.length + " files.");
         if (all || config.output.indexOf('policyCount') > -1) {
@@ -36,10 +37,32 @@ finish = function() {
         if (all || config.output.indexOf('traceDetails') > -1) {
             print("trace details: " + JSON.stringify(traceResponse));
         }
+        if (all || config.output.indexOf('targets') > -1) {
+            print("targets: " + JSON.stringify(targets(traceResponse)));
+        }
 
         if (all || config.output.indexOf('all') > -1) print(JSON.stringify(traceResponse));
     }
 };
+
+function targets(tr) {
+    var result = [];
+    tr.traceFiles.forEach(function(tf) {
+        tf.requests.forEach(function(req) {
+            if (req.target) {
+                req.target.requestWireTime = diffTimeStamps(req.target.requestStart, req.target.requestFinish);
+                req.target.responseWireTime = diffTimeStamps(req.target.responseStart, req.target.responseFinish);
+                //delete req.target.requestStart;
+                //delete req.target.requestFinish;
+                //delete req.target.responseStart;
+                //delete req.target.responseFinished;
+                result.push(req.target);
+            }
+        });
+    });
+
+    return result;
+}
 
 function policyCount(tr) {
     var ct = 0;
@@ -78,45 +101,64 @@ function policyTypeStats(tr) {
 
 function policyNameStats(tr) {
     var result = {};
-    tr.traceFiles.forEach(function(tf) {
-        tf.requests.forEach(function(req) {
-            req.policies.forEach(function(p) {
-                if (!result[p.name]) result[p.name] = {
-                    'count': 0,
-                    'min': 0,
-                    'max': 0,
-                    'totalExecutionDurationMs': 0
-                };
-                if (config.includeDisabled || p.enabled) {
-                    result[p.name].count++;
-                    result[p.name].totalExecutionDurationMs += p.executionDurationMs;
-                    result[p.name].averageExecutionDurationMs = result[p.name].totalExecutionDurationMs / result[p.name].count;
-                    if (p.executionDurationMs < result[p.name].min) result[p.name].min = p.executionDurationMs;
-                    if (p.executionDurationMs > result[p.name].max) result[p.name].max = p.executionDurationMs;
-                }
+    try {
+        tr.traceFiles.forEach(function(tf) {
+            tf.requests.forEach(function(req) {
+                req.policies.forEach(function(p) {
+                    if (!result[p.name]) result[p.name] = {
+                        'count': 0,
+                        'min': 0,
+                        'max': 0,
+                        'totalExecutionDurationMs': 0
+                    };
+                    if (config.includeDisabled || p.enabled) {
+                        result[p.name].count++;
+                        result[p.name].totalExecutionDurationMs += p.executionDurationMs;
+                        if (result[p.name].count > 0) result[p.name].averageExecutionDurationMs = result[p.name].totalExecutionDurationMs / result[p.name].count;
+                        if (p.executionDurationMs < result[p.name].min) result[p.name].min = p.executionDurationMs;
+                        if (p.executionDurationMs > result[p.name].max) result[p.name].max = p.executionDurationMs;
+                    }
+                });
             });
         });
-    });
+    } catch (e) {
+        print("error in policyNameStats");
+        var stack = getStackTrace(e);
+        print(JSON.stringify(e));
+        print(stack);
+    }
 
     return cleanupStats(result);
 }
 
 function cleanupStats(result) {
     var key, overAvgThreshold, overMaxThreshold, deleteKey;
-    for (key in result) {
-        overAvgThreshold = false;
-        overMaxThreshold = false;
-        deleteKey = true;
+    try {
+        for (key in result) {
+            overAvgThreshold = false;
+            overMaxThreshold = false;
+            deleteKey = true,
+            hasAvgThreshold=('omitAvgThreshold' in config),
+            hasMaxThreshold=('omitMaxThreshold' in config);
 
-        //overly expressive for clarity sake
-        if (config.omitAvgThreshold && result[key].averageExecutionDurationMs >= config.omitAvgThreshold) overAvgThreshold = true;
-        if (config.omitMaxThreshold && result[key].max >= config.omitMaxThreshold) overAvgThreshold = true;
-        if (config.omitAvgThreshold && config.omitMaxThreshold && (overAvgThreshold || overMaxThreshold)) deleteKey = false;
-        if (config.omitAvgThreshold && !config.omitMaxThreshold && overAvgThreshold) deleteKey = false;
-        if (!config.omitAvgThreshold && config.omitMaxThreshold && overMaxThreshold) deleteKey = false;
+            //overly expressive for clarity sake
 
-        if (deleteKey) delete result[key];
-        else delete result[key].totalExecutionDurationMs;
+            if (hasAvgThreshold && result[key].averageExecutionDurationMs >= config.omitAvgThreshold) overAvgThreshold = true;
+            if (hasAvgThreshold && result[key].max >= config.omitMaxThreshold) overAvgThreshold = true;
+            if (hasAvgThreshold && hasMaxThreshold && (overAvgThreshold || overMaxThreshold)) deleteKey = false;
+            if (hasAvgThreshold && !hasMaxThreshold && overAvgThreshold) deleteKey = false;
+            if (!hasAvgThreshold && hasMaxThreshold && overMaxThreshold) deleteKey = false;
+
+            if (deleteKey) {
+                delete result[key];
+            } else delete result[key].totalExecutionDurationMs;
+
+        }
+    } catch (e) {
+        print("error in cleanupStats");
+        var stack = getStackTrace(e);
+        print(JSON.stringify(e));
+        print(stack);
     }
     return result
 }
@@ -171,9 +213,23 @@ function processXMLTraceFile(file, traceResponse) {
                 if (isMessageStart(point)) {
                     if (traceResponse.curTraceFile[file].curMessage) traceResponse.curTraceFile[file].requests.push(traceResponse.curTraceFile[file].curMessage);
                     traceResponse.curTraceFile[file].curMessage = getMessage(point);
-                } else if (isTargetRequest(point)) {
-                    if (!traceResponse.curTraceFile[file].curMessage.targets) traceResponse.curTraceFile[file].curMessage.targets = [];
-                    traceResponse.curTraceFile[file].curMessage.targets.push(getTargetRequest(point, prevStop));
+                } else if (isTargetReqStart(point)) {
+                    traceResponse.curTraceFile[file].curMessage.target = getTargetReqStart(point);
+                } else if (isTargetReqSent(point)) {
+                    var res = getTargetReqSent(point);
+                    traceResponse.curTraceFile[file].curMessage.target.requestFinish = res.requestFinished;
+                    traceResponse.curTraceFile[file].curMessage.target.requestSize = res.requestSize;
+                    traceResponse.curTraceFile[file].curMessage.target.statusCode = res.statusCode;
+                } else if (isTargetRespStart(point)) {
+                    var res = getTargetRespStart(point);
+                    //note that status code can change throught he cycle
+                    traceResponse.curTraceFile[file].curMessage.target.responseStart = res.responseStarted;
+                    traceResponse.curTraceFile[file].curMessage.target.statusCode = res.statusCode;
+                } else if (isTargetRespRecvd(point)) {
+                    var res = getTargetRespRecvd(point);
+                    traceResponse.curTraceFile[file].curMessage.target.responseFinish = res.responseFinished;
+                    traceResponse.curTraceFile[file].curMessage.target.responseSize = res.responseSize;
+                    traceResponse.curTraceFile[file].curMessage.target.statusCode = res.statusCode;
                 } else if (isFlowChange(point)) {
                     //print("in isFlowChange");
                 } else if (isExecution(point)) {
@@ -182,14 +238,7 @@ function processXMLTraceFile(file, traceResponse) {
                 }
                 if (point.DebugInfo && point.DebugInfo.Timestamp) prevStop = point.DebugInfo.Timestamp.$text;
             } catch (e) {
-                var stack = e.stack.replace(/^[^\(]+?[\n$]/gm, '')
-                    .replace(/^\s+at\s+/gm, '')
-                    .replace(/^Object.<anonymous>\s*\(/gm, '{anonymous}()@')
-                    .split('\n');
-                print('error:');
-                print(JSON.stringify(e));
-                print(stack);
-
+                var stack = getStackTrace(e);
             }
         });
 
@@ -204,10 +253,7 @@ function processXMLTraceFile(file, traceResponse) {
             finish();
         });
     } catch (e) {
-        var stack = e.stack.replace(/^[^\(]+?[\n$]/gm, '')
-            .replace(/^\s+at\s+/gm, '')
-            .replace(/^Object.<anonymous>\s*\(/gm, '{anonymous}()@')
-            .split('\n');
+        var stack = getStackTrace(e);
         print('error:');
         print(JSON.stringify(e));
         print(stack);
@@ -250,9 +296,9 @@ function getMessage(point) {
     return result;
 }
 
-function isTargetRequest(point) {
+function isTargetReqStart(point) {
     try {
-        if (point.$.id === "StateChange" && point.DebugInfo && propertiesContains(point.DebugInfo.Properties.Property, "From", "REQ_SENT")) {
+        if (point.$.id === "StateChange" && point.DebugInfo && propertiesContains(point.DebugInfo.Properties.Property, "To", "TARGET_REQ_FLOW")) {
             return true;
         }
     } catch (e) {
@@ -262,9 +308,9 @@ function isTargetRequest(point) {
     return false;
 }
 
-function isTargetFlow(point) {
+function isTargetReqSent(point) {
     try {
-        if (point.$.id === "StateChange" && point.DebugInfo && propertiesContains(point.DebugInfo.Properties.Property, "From", "REQ_SENT")) {
+        if (point.$.id === "StateChange" && point.DebugInfo && propertiesContains(point.DebugInfo.Properties.Property, "To", "REQ_SENT")) {
             return true;
         }
     } catch (e) {
@@ -272,6 +318,46 @@ function isTargetFlow(point) {
         print(JSON.stringify(e));
     }
     return false;
+}
+
+function isTargetRespStart(point) {
+    try {
+        if (point.$.id === "StateChange" && point.DebugInfo && propertiesContains(point.DebugInfo.Properties.Property, "To", "RESP_START")) {
+            return true;
+        }
+    } catch (e) {
+        print("error in isTargetRequest");
+        print(JSON.stringify(e));
+    }
+    return false;
+}
+
+function isTargetRespRecvd(point) {
+    try {
+        if (point.$.id === "StateChange" && point.DebugInfo && propertiesContains(point.DebugInfo.Properties.Property, "From", "RESP_START")) {
+            return true;
+        }
+    } catch (e) {
+        print("error in isTargetRequest");
+        var stack = getStackTrace(e);
+        print(JSON.stringify(e));
+        print(stack);
+    }
+    return false;
+}
+
+function getStateChangeTDS(point) {
+    var result;
+    try {
+        if (point.$.id === "StateChange") {
+            if (point.DebugInfo) {
+                result = point.DebugInfo.Timestamp.$text;
+            }
+        }
+    } catch (e) {
+        print(JSON.stringify(e));
+    }
+    return result;
 }
 
 function isTargetRequest(point) {
@@ -286,20 +372,48 @@ function isTargetRequest(point) {
     return false;
 }
 
-function getTargetRequest(point) {
+function getTargetReqStart(point) {
     var result = {};
     try {
-        if (point.$.id === "FlowInfo") {
-            if (point.DebugInfo) {
-                result.timestamp = point.DebugInfo.Timestamp.$text;
-                point.DebugInfo.Properties.Property.some(function(property) {
-                    if (property.$.name === "loadbalancing.targetserver") {
-                        result.name = property.$text;
-                        return;
-                    }
-                });
-            }
-        }
+        result.requestStart = point.DebugInfo.Timestamp.$text;
+        result.URI = point.RequestMessage.URI.$text;
+        result.verb = point.RequestMessage.Verb.$text;
+    } catch (e) {
+        print(JSON.stringify(e));
+    }
+    return result;
+}
+
+function getTargetReqSent(point) {
+    var result = {};
+    try {
+        result.requestFinished = point.DebugInfo.Timestamp.$text;
+        result.requestSize = getHeaderValue(point.ResponseMessage.Headers[0].Header, "Content-Length");
+        result.statusCode = point.ResponseMessage.ReasonPhrase.$text;
+    } catch (e) {
+        print(JSON.stringify(e));
+    }
+    return result;
+}
+
+function getTargetRespStart(point) {
+    var result = {};
+    try {
+        result.responseStarted = point.DebugInfo.Timestamp.$text;
+        result.statusCode = point.ResponseMessage.ReasonPhrase.$text;
+    } catch (e) {
+        print(JSON.stringify(e));
+    }
+    return result;
+}
+
+
+function getTargetRespRecvd(point) {
+    var result = {};
+    try {
+        result.responseFinished = point.DebugInfo.Timestamp.$text;
+        result.responseSize = getHeaderValue(point.ResponseMessage.Headers[0].Header, "Content-Length");
+        result.statusCode = point.ResponseMessage.ReasonPhrase.$text;
     } catch (e) {
         print(JSON.stringify(e));
     }
@@ -320,7 +434,9 @@ function isFlowChange(point) {
             }
         }
     } catch (e) {
+        var stack = getStackTrace(e);
         print(JSON.stringify(e));
+        print(stack);
     }
     return result;
 }
@@ -342,7 +458,9 @@ function getFlow(point, prevStop) {
             }
         }
     } catch (e) {
+        var stack = getStackTrace(e);
         print(JSON.stringify(e));
+        print(stack);
     }
     return result;
 }
@@ -376,7 +494,27 @@ function getExecution(point, prevStop) {
             }
         }
     } catch (e) {
+        var stack = getStackTrace(e);
         print(JSON.stringify(e));
+        print(stack);
+    }
+    return result;
+}
+
+function getHeaderValue(headers, name) {
+    var result = '';
+    try {
+        headers.some(function(header) {
+            if (header.$.name === name) {
+                result = header.$text;
+                return;
+            }
+        });
+    } catch (e) {
+        print("error in getHeaderValue");
+        var stack = getStackTrace(e);
+        print(JSON.stringify(e));
+        print(stack);
     }
     return result;
 }
@@ -399,7 +537,9 @@ function propertiesContains(props, name, value) {
         });
     } catch (e) {
         print("error in propertiesContains");
+        var stack = getStackTrace(e);
         print(JSON.stringify(e));
+        print(stack);
     }
     return result;
 }
@@ -407,6 +547,8 @@ function propertiesContains(props, name, value) {
 function diffTimeStamps(start, stop) {
     //inputs are strings
     //09-11-15 18:23:14:687
+
+    if (!start || !stop) return 'nan';
 
     var startArray = start.split(':');
     var stopArray = stop.split(':');
@@ -446,6 +588,13 @@ function countKeys(obj) {
         }
     }
     return c;
+}
+
+function getStackTrace(e) {
+    return e.stack.replace(/^[^\(]+?[\n$]/gm, '')
+        .replace(/^\s+at\s+/gm, '')
+        .replace(/^Object.<anonymous>\s*\(/gm, '{anonymous}()@')
+        .split('\n');
 }
 
 module.exports = {
