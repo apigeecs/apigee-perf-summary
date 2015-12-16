@@ -1,11 +1,17 @@
+// packages
+var xml2js = require('xml2js'),
+    colors = require('colors'),
+    XmlStream = require('xml-stream'),
+    AsciiTable = require('ascii-table'),
+    _ = require("lodash"),
+    path = require('path')
+    ;
+
 var variables = {},
     proxyResponse,
     results = {},
     traceSets = [],
     fs = require('fs'),
-    xml2js = require('xml2js'),
-    colors = require('colors'),
-    XmlStream = require('xml-stream'),
     traceResponse = {
         "traceFiles": [],
         "curTraceFile": {}
@@ -18,12 +24,10 @@ print = function(msg) {
 };
 
 outputTraceDetails = function(traceDetails) {
-    var AsciiTable = require('ascii-table');
-    var _ = require("lodash");
+    var table = new AsciiTable('Trace Details');
     var items = [];
-
-    var path = require('path');
-
+ 
+    // discover the superset of keys in the package.
     _.forEach(traceDetails.traceFiles, function(tracefile) {
         _.forEach(tracefile.requests, function(request) {
             _.forEach(request.policies, function(policy) {
@@ -36,13 +40,11 @@ outputTraceDetails = function(traceDetails) {
         });
     });
 
-    var table = new AsciiTable('Trace Details');
-
+    // build the table header
     table
       .setHeading(["trace file","application","env","proxy"].concat(items));
-
-    //table.addRow(1,2,3,4,5,6,7,8,9,0,1,2,3);
-      
+    
+    // build the table body
     _.forEach(traceDetails.traceFiles, function(tracefile) {
         _.forEach(tracefile.requests, function(request) {
             var section = [path.basename(tracefile.file), request.application, request.environment, request.proxy];
@@ -58,8 +60,27 @@ outputTraceDetails = function(traceDetails) {
     });
 
     print(table.toString());
-
 };
+
+outputPolciyNameStats = function(policynamestats) {
+    var table = new AsciiTable('Policy Statistics by Name');
+
+    // this data are calculated, and is guaranteed to be this list (I hope)
+    table.setHeading('policy','count','min','max','avg');
+
+    // this is the data package values in the order I want to display them
+    var dataOrder = ['count','min','max','averageExecutionDurationMs'];
+
+    _.forEach(policynamestats, function(stats,policy) {
+        var dataDisplay = [policy];
+        _.forEach(dataOrder, function(dataItem) {
+            dataDisplay.push(stats[dataItem]);
+        });
+        table.addRow(dataDisplay);
+    });
+
+    print(table.toString());
+}
 
 finish = function() {
     var ct = countKeys(traceResponse.curTraceFile);
@@ -75,7 +96,8 @@ finish = function() {
             print("statistics by policy type: " + JSON.stringify(policyTypeStats(traceResponse)));
         }
         if (all || config.output.indexOf('policyNameStats') > -1) {
-            print("statistics by policy name: " + JSON.stringify(policyNameStats(traceResponse)));
+            outputPolciyNameStats(policyNameStats(traceResponse));
+            //print("statistics by policy name: " + JSON.stringify(policyNameStats(traceResponse)));
         }
         if (all || config.output.indexOf('traceDetails') > -1) {
             //print("trace details: " + JSON.stringify(traceResponse));
