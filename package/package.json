@@ -26,6 +26,8 @@
         "xml-stream":">= 0.4.5",
         "path": ">= 0.11.14",
         "node-inspector": ">= 0.12.3",
-        "colors":">=1.1.2"
+        "colors":">=1.1.2",
+        "ascii-table":">=0.0.8",
+        "lodash":">=3.10.1"
     }
 }

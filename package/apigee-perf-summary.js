@@ -12,10 +12,51 @@ var variables = {},
     },
     config;
 
-
 print = function(msg) {
     if (msg && (typeof msg === 'object')) console.log(JSON.stringify(msg));
     else console.log(msg);
+};
+
+outputTraceDetails = function(traceDetails) {
+    var AsciiTable = require('ascii-table');
+    var _ = require("lodash");
+    var items = [];
+
+    _.forEach(traceDetails.traceFiles, function(tracefile) {
+        _.forEach(tracefile.requests, function(request) {
+            _.forEach(request.policies, function(policy) {
+                _.forEach(policy, function(value, key) {
+                    if( ! _.includes(items,key)) {
+                        items.push(key);
+                    }
+                });
+            });
+        });
+    });
+
+    var table = new AsciiTable('Trace Details');
+
+    table
+      .setHeading(["trace file","application","env","proxy"].concat(items));
+
+    //table.addRow(1,2,3,4,5,6,7,8,9,0,1,2,3);
+      
+    _.forEach(traceDetails.traceFiles, function(tracefile) {
+        _.forEach(tracefile.requests, function(request) {
+            var section = [tracefile.file, request.application, request.environment, request.proxy];
+            table.addRow(section);
+            _.forEach(request.policies, function(policy) {
+                var data = ['','','',''];
+                _.forEach(items, function(itemName) {
+                    data.push(policy[itemName]);
+                })
+                table.addRow(data);
+            })
+        })
+    });
+
+    print(table.toString());
+
 };
 
 finish = function() {
@@ -35,7 +76,8 @@ finish = function() {
             print("statistics by policy name: " + JSON.stringify(policyNameStats(traceResponse)));
         }
         if (all || config.output.indexOf('traceDetails') > -1) {
-            print("trace details: " + JSON.stringify(traceResponse));
+            //print("trace details: " + JSON.stringify(traceResponse));
+            outputTraceDetails(traceResponse);
         }
         if (all || config.output.indexOf('targets') > -1) {
             print("targets: " + JSON.stringify(targets(traceResponse)));
