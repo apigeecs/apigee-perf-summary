@@ -22,6 +22,8 @@ outputTraceDetails = function(traceDetails) {
     var _ = require("lodash");
     var items = [];
 
+    var path = require('path');
+
     _.forEach(traceDetails.traceFiles, function(tracefile) {
         _.forEach(tracefile.requests, function(request) {
             _.forEach(request.policies, function(policy) {
@@ -43,7 +45,7 @@ outputTraceDetails = function(traceDetails) {
       
     _.forEach(traceDetails.traceFiles, function(tracefile) {
         _.forEach(tracefile.requests, function(request) {
-            var section = [tracefile.file, request.application, request.environment, request.proxy];
+            var section = [path.basename(tracefile.file), request.application, request.environment, request.proxy];
             table.addRow(section);
             _.forEach(request.policies, function(policy) {
                 var data = ['','','',''];
