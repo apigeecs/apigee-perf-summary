@@ -4,7 +4,8 @@ var xml2js = require('xml2js'),
     XmlStream = require('xml-stream'),
     AsciiTable = require('ascii-table'),
     _ = require("lodash"),
-    path = require('path')
+    path = require('path'),
+    Stats = require('fast-stats').Stats
     ;
 
 var variables = {},
@@ -66,10 +67,10 @@ outputPolciyNameStats = function(policynamestats) {
     var table = new AsciiTable('Policy Statistics by Name');
 
     // this data are calculated, and is guaranteed to be this list (I hope)
-    table.setHeading('policy','count','min','max','avg');
+    table.setHeading('policy','count','min','max','avg','σ');
 
     // this is the data package values in the order I want to display them
-    var dataOrder = ['count','min','max','averageExecutionDurationMs'];
+    var dataOrder = ['count','min','max','averageExecutionDurationMs','executionσ'];
 
     _.forEach(policynamestats, function(stats,policy) {
         var dataDisplay = [policy];
@@ -167,22 +168,14 @@ function policyTypeStats(tr) {
 
 function policyNameStats(tr) {
     var result = {};
+    var stats = {};
     try {
         tr.traceFiles.forEach(function(tf) {
             tf.requests.forEach(function(req) {
                 req.policies.forEach(function(p) {
-                    if (!result[p.name]) result[p.name] = {
-                        'count': 0,
-                        'min': 0,
-                        'max': 0,
-                        'totalExecutionDurationMs': 0
-                    };
+                    if (!stats[p.name]) stats[p.name] = new Stats({ bucket_precision: 10 });
                     if (config.includeDisabled || p.enabled) {
-                        result[p.name].count++;
-                        result[p.name].totalExecutionDurationMs += p.executionDurationMs;
-                        if (result[p.name].count > 0) result[p.name].averageExecutionDurationMs = result[p.name].totalExecutionDurationMs / result[p.name].count;
-                        if (p.executionDurationMs < result[p.name].min) result[p.name].min = p.executionDurationMs;
-                        if (p.executionDurationMs > result[p.name].max) result[p.name].max = p.executionDurationMs;
+                        stats[p.name].push(p.executionDurationMs);
                     }
                 });
             });
@@ -193,6 +186,17 @@ function policyNameStats(tr) {
         print(JSON.stringify(e));
         print(stack);
     }
+
+    _.forEach(stats, function(stats,policy) {
+        var range = stats.range();
+        result[policy] = {
+            "count": stats.length,
+            "min":range[0],
+            "max":range[1],
+            "averageExecutionDurationMs":stats.μ().toFixed(2),
+            "executionσ":stats.σ().toFixed(2)
+        };
+    });
 
     return cleanupStats(result);
 }

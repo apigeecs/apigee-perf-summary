@@ -28,6 +28,7 @@
         "node-inspector": ">= 0.12.3",
         "colors":">=1.1.2",
         "ascii-table":">=0.0.8",
-        "lodash":">=3.10.1"
+        "lodash":">=3.10.1",
+        "fast-stats":">=0.0.3"
     }
 }
