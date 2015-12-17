@@ -68,6 +68,16 @@ Output from the script includes a detailed information and JSON results objects 
 	    }
 	}
 
+Output is transitioning to a tabular format, which is readable to humans
+
+    .-------------------------------------------------.
+    |            Policy Statistics by Name            |
+    |-------------------------------------------------|
+    |   policy    | count | min | max |  avg  |   σ   |
+    |-------------|-------|-----|-----|-------|-------|
+    | jsCalculate |     3 |  31 | 130 | 72.67 | 41.91 |
+    '-------------------------------------------------'
+
 ## Tests
 
   none yet
