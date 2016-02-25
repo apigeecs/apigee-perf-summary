@@ -736,9 +736,7 @@ function processDebugSession() {
             }
             config.debugSessionId = d.name;
             config.debugStart = new Date();
-            print('using debugSessionId: ' + config.debugSessionId);
             //now we want to call the retrieval loop
-            //interval(processTraceTransactions, 1000, 20);
             processTraceTransactions();
         });
     });
