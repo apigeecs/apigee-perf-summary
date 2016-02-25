@@ -783,8 +783,6 @@ function processTraceTransactions() {
                     }
                 }
                 if (d.length >= 20 || ((new Date() - config.debugStart) > 10 * 60 * 1000)) {
-                    print("finishing " + config.debugSessionId);
-                    print(d);
                     config.debugSessionId = uuid();
                     processDebugSession();
                     return;
