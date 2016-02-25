@@ -68,6 +68,35 @@ Output from the script includes a detailed information and JSON results objects 
 	    }
 	}
 
+Remote sessions may be initiated by supplying connection information including the org, environment, api, revision, and credentials authorized to execute trace sessions in the org. Sample:
+
+	perf_summary = require("apigee-perf-summary");
+
+	perf_summary.summarize({
+	    debug: true,
+	    org: 'davidwallen2014',
+	    env: 'test',
+	    api: '24Solver',
+	    rev: '17',
+	    auth: 'Basic ZGFsbGfooFwaWdlZbarjb20nomszbSumITIz',
+	    //all,fileCount,policyCount,policyTypeStats,policyNameStats,traceDetails
+	    output: 'fileCount,policyCount,policyNameStats',
+	    omitAvgThreshold: 0,
+	    omitMaxThreshold: 0,
+	    includeDisabled: false
+	});
+
+
+Output is transitioning to a tabular format, which is readable to humans
+
+    .-------------------------------------------------.
+    |            Policy Statistics by Name            |
+    |-------------------------------------------------|
+    |   policy    | count | min | max |  avg  |   σ   |
+    |-------------|-------|-----|-----|-------|-------|
+    | jsCalculate |     3 |  31 | 130 | 72.67 | 41.91 |
+    '-------------------------------------------------'
+
 ## Tests
 
   none yet

@@ -1,4 +1,4 @@
-perf_summary = require("./package/apigee-perf-summary");
+perf_summary = require("apigee-perf-summary");
 
 perf_summary.summarize({
     debug: true,

@@ -1,3 +1,13 @@
+// packages
+var xml2js = require('xml2js'),
+    colors = require('colors'),
+    XmlStream = require('xml-stream'),
+    AsciiTable = require('ascii-table'),
+    _ = require("lodash"),
+    path = require('path'),
+    Stats = require('fast-stats').Stats
+    ;
+
 var variables = {},
     proxyResponse,
     results = {},
@@ -8,6 +18,7 @@ var variables = {},
     XmlStream = require('xml-stream'),
     Stream = require('stream'),
     https = require('https'),
+
     traceResponse = {
         "traceFiles": [],
         "curTraceFile": {}
@@ -15,11 +26,69 @@ var variables = {},
     traceMessages = {},
     config;
 
-
 print = function(msg) {
     if (msg && (typeof msg === 'object')) console.log(JSON.stringify(msg));
     else console.log(msg);
 };
+
+outputTraceDetails = function(traceDetails) {
+    var table = new AsciiTable('Trace Details');
+    var items = [];
+ 
+    // discover the superset of keys in the package.
+    _.forEach(traceDetails.traceFiles, function(tracefile) {
+        _.forEach(tracefile.requests, function(request) {
+            _.forEach(request.policies, function(policy) {
+                _.forEach(policy, function(value, key) {
+                    if( ! _.includes(items,key)) {
+                        items.push(key);
+                    }
+                });
+            });
+        });
+    });
+
+    // build the table header
+    table
+      .setHeading(["trace file","application","env","proxy"].concat(items));
+    
+    // build the table body
+    _.forEach(traceDetails.traceFiles, function(tracefile) {
+        _.forEach(tracefile.requests, function(request) {
+            var section = [path.basename(tracefile.file), request.application, request.environment, request.proxy];
+            table.addRow(section);
+            _.forEach(request.policies, function(policy) {
+                var data = ['','','',''];
+                _.forEach(items, function(itemName) {
+                    data.push(policy[itemName]);
+                })
+                table.addRow(data);
+            })
+        })
+    });
+
+    print(table.toString());
+};
+
+outputPolciyNameStats = function(policynamestats) {
+    var table = new AsciiTable('Policy Statistics by Name');
+
+    // this data are calculated, and is guaranteed to be this list (I hope)
+    table.setHeading('policy','count','min','max','avg','σ');
+
+    // this is the data package values in the order I want to display them
+    var dataOrder = ['count','min','max','averageExecutionDurationMs','executionσ'];
+
+    _.forEach(policynamestats, function(stats,policy) {
+        var dataDisplay = [policy];
+        _.forEach(dataOrder, function(dataItem) {
+            dataDisplay.push(stats[dataItem]);
+        });
+        table.addRow(dataDisplay);
+    });
+
+    print(table.toString());
+}
 
 finish = function() {
     var ct = countKeys(traceResponse.curTraceFile);
@@ -35,10 +104,12 @@ finish = function() {
             print("statistics by policy type: " + JSON.stringify(policyTypeStats(traceResponse)));
         }
         if (all || config.output.indexOf('policyNameStats') > -1) {
-            print("statistics by policy name: " + JSON.stringify(policyNameStats(traceResponse)));
+            outputPolciyNameStats(policyNameStats(traceResponse));
+            //print("statistics by policy name: " + JSON.stringify(policyNameStats(traceResponse)));
         }
         if (all || config.output.indexOf('traceDetails') > -1) {
-            print("trace details: " + JSON.stringify(traceResponse));
+            //print("trace details: " + JSON.stringify(traceResponse));
+            outputTraceDetails(traceResponse);
         }
         if (all || config.output.indexOf('targets') > -1) {
             print("targets: " + JSON.stringify(targets(traceResponse)));
@@ -104,22 +175,14 @@ function policyTypeStats(tr) {
 
 function policyNameStats(tr) {
     var result = {};
+    var stats = {};
     try {
         tr.traceFiles.forEach(function(tf) {
             tf.requests.forEach(function(req) {
                 req.policies.forEach(function(p) {
-                    if (!result[p.name]) result[p.name] = {
-                        'count': 0,
-                        'min': 0,
-                        'max': 0,
-                        'totalExecutionDurationMs': 0
-                    };
+                    if (!stats[p.name]) stats[p.name] = new Stats({ bucket_precision: 10 });
                     if (config.includeDisabled || p.enabled) {
-                        result[p.name].count++;
-                        result[p.name].totalExecutionDurationMs += p.executionDurationMs;
-                        if (result[p.name].count > 0) result[p.name].averageExecutionDurationMs = result[p.name].totalExecutionDurationMs / result[p.name].count;
-                        if (p.executionDurationMs < result[p.name].min) result[p.name].min = p.executionDurationMs;
-                        if (p.executionDurationMs > result[p.name].max) result[p.name].max = p.executionDurationMs;
+                        stats[p.name].push(p.executionDurationMs);
                     }
                 });
             });
@@ -130,6 +193,17 @@ function policyNameStats(tr) {
         print(JSON.stringify(e));
         print(stack);
     }
+
+    _.forEach(stats, function(stats,policy) {
+        var range = stats.range();
+        result[policy] = {
+            "count": stats.length,
+            "min":range[0],
+            "max":range[1],
+            "averageExecutionDurationMs":stats.μ().toFixed(2),
+            "executionσ":stats.σ().toFixed(2)
+        };
+    });
 
     return cleanupStats(result);
 }
