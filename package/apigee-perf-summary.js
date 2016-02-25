@@ -6,10 +6,13 @@ var variables = {},
     xml2js = require('xml2js'),
     colors = require('colors'),
     XmlStream = require('xml-stream'),
+    Stream = require('stream'),
+    https = require('https'),
     traceResponse = {
         "traceFiles": [],
         "curTraceFile": {}
     },
+    traceMessages = {},
     config;
 
 
@@ -138,11 +141,10 @@ function cleanupStats(result) {
             overAvgThreshold = false;
             overMaxThreshold = false;
             deleteKey = true,
-            hasAvgThreshold=('omitAvgThreshold' in config),
-            hasMaxThreshold=('omitMaxThreshold' in config);
+                hasAvgThreshold = ('omitAvgThreshold' in config),
+                hasMaxThreshold = ('omitMaxThreshold' in config);
 
             //overly expressive for clarity sake
-
             if (hasAvgThreshold && result[key].averageExecutionDurationMs >= config.omitAvgThreshold) overAvgThreshold = true;
             if (hasAvgThreshold && result[key].max >= config.omitMaxThreshold) overAvgThreshold = true;
             if (hasAvgThreshold && hasMaxThreshold && (overAvgThreshold || overMaxThreshold)) deleteKey = false;
@@ -166,13 +168,32 @@ function cleanupStats(result) {
 
 var summarize = function(aConfig) {
     config = aConfig;
-    if (config.traceFile) {
-        if (config.debug) print("loading xml tracefile");
-        try {
+    try {
+        if (config.traceFile) {
+            if (config.debug) print("loading xml tracefile");
+
             processXMLTraceFiles(config);
-        } catch (e) {
-            print(JSON.stringify(e));
+        } else {
+            if (config.debug) print("loading live trace data");
+
+            if (!config.debugSessionId) config.debugSessionId = uuid();
+            if (!config.auth) {
+                var user = process.env.Apigee_User,
+                    secret = process.env.Apigee_Secret;
+                if (!user || !secret) {
+                    var errMsg = 'no authorization provided and no env variable(s) for Apigee_User and/or Apigee_Secret';
+                    print(errMsg);
+                    throw new Error(errMsg);
+                }
+                config.auth = 'Basic ' + (new Buffer(user + ":" + secret)).toString('base64');
+            }
+            processDebugSession();
         }
+    } catch (e) {
+        var stack = getStackTrace(e);
+        print('error:');
+        print(e);
+        print(stack);
     }
 };
 
@@ -181,19 +202,38 @@ function processXMLTraceFiles(config) {
     if (fs.statSync(config.traceFile).isDirectory()) files = getFiles(config.traceFile);
     else files = [config.traceFile];
     files.forEach(function(file) {
-        processXMLTraceFile(file, traceResponse);
+        processXMLTraceFile(file);
     });
 }
 
-function processXMLTraceFile(file, traceResponse) {
-    try {
-        traceResponse.curTraceFile[file] = {
-            "file": file,
-            "requests": []
-        };
+function processXMLTraceFile(file) {
+    traceResponse.curTraceFile[file] = {
+        "file": file,
+        "requests": []
+    };
+    var stream = fs.createReadStream(file);
+    processXMLTraceStream(file, stream);
 
-        var stream = fs.createReadStream(file),
-            xml = new XmlStream(stream),
+}
+
+
+function processXMLTraceString(id, str) {
+
+    traceResponse.curTraceFile[id] = {
+        "file": id,
+        "requests": []
+    };
+
+    var myStream = new Stream.Readable();
+    myStream._read = function noop() {};
+    myStream.push(str);
+    myStream.push(null);
+    processXMLTraceStream(id, myStream);
+}
+
+function processXMLTraceStream(id, stream) {
+    try {
+        var xml = new XmlStream(stream),
             prevStop;
 
         xml.preserve('Point', true);
@@ -211,30 +251,30 @@ function processXMLTraceFile(file, traceResponse) {
         xml.on('endElement: Point', function(point) {
             try {
                 if (isMessageStart(point)) {
-                    if (traceResponse.curTraceFile[file].curMessage) traceResponse.curTraceFile[file].requests.push(traceResponse.curTraceFile[file].curMessage);
-                    traceResponse.curTraceFile[file].curMessage = getMessage(point);
+                    if (traceResponse.curTraceFile[id].curMessage) traceResponse.curTraceFile[id].requests.push(traceResponse.curTraceFile[id].curMessage);
+                    traceResponse.curTraceFile[id].curMessage = getMessage(point);
                 } else if (isTargetReqStart(point)) {
-                    traceResponse.curTraceFile[file].curMessage.target = getTargetReqStart(point);
+                    traceResponse.curTraceFile[id].curMessage.target = getTargetReqStart(point);
                 } else if (isTargetReqSent(point)) {
                     var res = getTargetReqSent(point);
-                    traceResponse.curTraceFile[file].curMessage.target.requestFinish = res.requestFinished;
-                    traceResponse.curTraceFile[file].curMessage.target.requestSize = res.requestSize;
-                    traceResponse.curTraceFile[file].curMessage.target.statusCode = res.statusCode;
+                    traceResponse.curTraceFile[id].curMessage.target.requestFinish = res.requestFinished;
+                    traceResponse.curTraceFile[id].curMessage.target.requestSize = res.requestSize;
+                    traceResponse.curTraceFile[id].curMessage.target.statusCode = res.statusCode;
                 } else if (isTargetRespStart(point)) {
                     var res = getTargetRespStart(point);
                     //note that status code can change throught he cycle
-                    traceResponse.curTraceFile[file].curMessage.target.responseStart = res.responseStarted;
-                    traceResponse.curTraceFile[file].curMessage.target.statusCode = res.statusCode;
+                    traceResponse.curTraceFile[id].curMessage.target.responseStart = res.responseStarted;
+                    traceResponse.curTraceFile[id].curMessage.target.statusCode = res.statusCode;
                 } else if (isTargetRespRecvd(point)) {
                     var res = getTargetRespRecvd(point);
-                    traceResponse.curTraceFile[file].curMessage.target.responseFinish = res.responseFinished;
-                    traceResponse.curTraceFile[file].curMessage.target.responseSize = res.responseSize;
-                    traceResponse.curTraceFile[file].curMessage.target.statusCode = res.statusCode;
+                    traceResponse.curTraceFile[id].curMessage.target.responseFinish = res.responseFinished;
+                    traceResponse.curTraceFile[id].curMessage.target.responseSize = res.responseSize;
+                    traceResponse.curTraceFile[id].curMessage.target.statusCode = res.statusCode;
                 } else if (isFlowChange(point)) {
                     //print("in isFlowChange");
                 } else if (isExecution(point)) {
-                    if (!traceResponse.curTraceFile[file].curMessage.policies) traceResponse.curTraceFile[file].curMessage.policies = [];
-                    traceResponse.curTraceFile[file].curMessage.policies.push(getExecution(point, prevStop));
+                    if (!traceResponse.curTraceFile[id].curMessage.policies) traceResponse.curTraceFile[id].curMessage.policies = [];
+                    traceResponse.curTraceFile[id].curMessage.policies.push(getExecution(point, prevStop));
                 }
                 if (point.DebugInfo && point.DebugInfo.Timestamp) prevStop = point.DebugInfo.Timestamp.$text;
             } catch (e) {
@@ -243,19 +283,19 @@ function processXMLTraceFile(file, traceResponse) {
         });
 
         xml.on('end', function() {
-            if (traceResponse.curTraceFile[file].curMessage) traceResponse.curTraceFile[file].requests.push(traceResponse.curTraceFile[file].curMessage);
-            delete traceResponse.curTraceFile[file].curMessage;
+            if (traceResponse.curTraceFile[id].curMessage) traceResponse.curTraceFile[id].requests.push(traceResponse.curTraceFile[id].curMessage);
+            delete traceResponse.curTraceFile[id].curMessage;
 
             //if (config.debug) print(file + "=\n" + JSON.stringify(traceResponse.curTraceFile[file]));
 
-            traceResponse.traceFiles.push(traceResponse.curTraceFile[file]);
-            delete(traceResponse.curTraceFile[file]);
+            traceResponse.traceFiles.push(traceResponse.curTraceFile[id]);
+            delete(traceResponse.curTraceFile[id]);
             finish();
         });
     } catch (e) {
         var stack = getStackTrace(e);
         print('error:');
-        print(JSON.stringify(e));
+        print(e);
         print(stack);
 
     }
@@ -424,7 +464,7 @@ function isFlowChange(point) {
     var result = false;
     try {
         if (point.$.id === "FlowInfo") {
-            if (point.DebugInfo) {
+            if (point.DebugInfo && point.DebugInfo.Properties && point.DebugInfo.Properties.Property) {
                 point.DebugInfo.Properties.Property.some(function(property) {
                     if (property.$.name === "current.flow.name") {
                         result = true;
@@ -596,6 +636,188 @@ function getStackTrace(e) {
         .replace(/^Object.<anonymous>\s*\(/gm, '{anonymous}()@')
         .split('\n');
 }
+
+function processDebugSession() {
+    /*
+    curl -X POST --header "Content-Type: application/x-www-url-form-encoded" --header "Authorization: Basic ZGFsbGVuQGFwaWdlZS5jb206NEszbGx5ITIz" "https://api.enterprise.apigee.com/v1/organizations/davidwallen2014/environments/prod/apis/24Solver/revisions/3/debugsessions?session=my%20session&timeout=60000"
+    */
+
+    var options = {
+        host: 'api.enterprise.apigee.com',
+        port: 443,
+        path: '/v1/organizations/' + config.org + '/environments/' + config.env + '/apis/' + config.api + '/revisions/' + config.rev + '/debugsessions?session=' + config.debugSessionId,
+        method: 'POST',
+        headers: {
+            //Accept: 'application/json',
+            Authorization: config.auth,
+            'Content-Type': 'application/x-www-url-form-encoded'
+        }
+    };
+
+    var req = https.request(options, function(res) {
+        res.setEncoding('utf8');
+        res.on('data', function(d) {
+            d = JSON.parse(d);
+            if (!d.name) {
+                print(d);
+                print(path);
+                throw new Error(d);
+            }
+            config.debugSessionId = d.name;
+            config.debugStart = new Date();
+            print('using debugSessionId: ' + config.debugSessionId);
+            //now we want to call the retrieval loop
+            //interval(processTraceTransactions, 1000, 20);
+            processTraceTransactions();
+        });
+    });
+
+    req.on('error', function(e) {
+        print('error in the https call');
+        console.error(e);
+        exit();
+    });
+    req.end();
+}
+
+function processTraceTransactions() {
+    /*
+    curl -X GET --header "Authorization: Basic ZGFsbGVuQGFwaWdlZS5jb206NEszbGx5ITIz" "https://api.enterprise.apigee.com/v1/organizations/davidwallen2014/environments/prod/apis/24Solver/revisions/3/debugsessions/my%20session/data"
+
+    curl -X GET --header "Accept: application/json" --header "Authorization: Basic ZGFsbGVuQGFwaWdlZS5jb206NEszbGx5ITIz" "https://api.enterprise.apigee.com/v1/organizations/davidwallen2014/environments/prod/apis/24Solver/revisions/3/debugsessions/my%20session/data/f9bd370b-c3cc-4ada-81f7-56bf6c331b3d__716"
+    */
+    var options = {
+        host: 'api.enterprise.apigee.com',
+        port: 443,
+        path: '/v1/organizations/' + config.org + '/environments/' + config.env + '/apis/' + config.api + '/revisions/' + config.rev + '/debugsessions/' + config.debugSessionId + '/data',
+        method: 'GET',
+        headers: {
+            Accept: 'application/json',
+            Authorization: config.auth
+        }
+    };
+
+    var req = https.request(options, function(res) {
+        res.setEncoding('utf8');
+        res.on('data', function(d) {
+            //need to test is we have good JSON
+            if (isJson(d)) {
+                d = JSON.parse(d);
+                //d contains an array of transactions identities
+                //we want to work backwards through the result
+                //if the transaction id isn't in our transactions array
+                //then we want to add it to our array
+                //then call processTransaction on it
+                for (var i = d.length; i-- > 0;) {
+                    if (!traceMessages[d[i]]) {
+                        traceMessages[d[i]] = {
+                            processed: false
+                        }; // d[i] is theId of the message 
+                        processTraceTransaction(d[i]);
+                    }
+                }
+                if (d.length >= 20 || ((new Date() - config.debugStart) > 10 * 60 * 1000)) {
+                    print("finishing " + config.debugSessionId);
+                    print(d);
+                    config.debugSessionId = uuid();
+                    processDebugSession();
+                    return;
+                } else {
+                    processTraceTransactions();
+                }
+            } else {
+                print('error in the the response - JSON not found');
+                print(d);
+            }
+
+        });
+    });
+
+    req.setTimeout(30000, function() {
+        //when timeout, this callback will be called
+    });
+
+    req.on('error', function(e) {
+        print('error in the https call');
+        done = true;
+        console.error(e);
+    });
+    req.end();
+
+}
+
+function processTraceTransaction(id) {
+    /*
+    curl -X GET --header "Authorization: Basic ZGFsbGVuQGFwaWdlZS5jb206NEszbGx5ITIz" "https://api.enterprise.apigee.com/v1/organizations/davidwallen2014/environments/prod/apis/24Solver/revisions/3/debugsessions/my%20session/data"
+
+    curl -X GET --header "Accept: application/json" --header "Authorization: Basic ZGFsbGVuQGFwaWdlZS5jb206NEszbGx5ITIz" "https://api.enterprise.apigee.com/v1/organizations/davidwallen2014/environments/prod/apis/24Solver/revisions/3/debugsessions/my%20session/data/f9bd370b-c3cc-4ada-81f7-56bf6c331b3d__716"
+    */
+    print('in processTraceTransaction');
+    var data = '';
+
+    var options = {
+        host: 'api.enterprise.apigee.com',
+        port: 443,
+        path: '/v1/organizations/' + config.org + '/environments/' + config.env + '/apis/' + config.api + '/revisions/' + config.rev + '/debugsessions/' + config.debugSessionId + '/data/' + id,
+        method: 'GET',
+        headers: {
+            Accept: 'application/xml',
+            Authorization: config.auth
+        }
+    };
+
+    var req = https.request(options, function(res) {
+        res.on('data', function(d) {
+            data += d;
+        });
+        res.on('end', function(d) {
+            //d = JSON.parse(data);
+            processXMLTraceString(id, data);
+        });
+
+    });
+
+    req.on('error', function(e) {
+        print('error in the https call');
+        done = true;
+        console.error(e);
+    });
+    req.end();
+
+}
+
+function interval(func, wait, times) {
+    var interv = function(w, t) {
+        return function() {
+            if (typeof t === "undefined" || t-- > 0) {
+                setTimeout(interv, w);
+                try {
+                    func.call(null);
+                } catch (e) {
+                    t = 0;
+                    throw e.toString();
+                }
+            }
+        };
+    }(wait, times);
+
+    setTimeout(interv, wait);
+};
+
+function uuid() {
+    var d = new Date().getTime();
+    var uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        var r = (d + Math.random() * 16) % 16 | 0;
+        d = Math.floor(d / 16);
+        return (c == 'x' ? r : (r & 0x7 | 0x8)).toString(16);
+    });
+    return uuid;
+}
+
+function isJson(blob) {
+    return (/^[\],:{}\s]*$/.test(blob.replace(/\\["\\\/bfnrtu]/g, '@').replace(/"[^"\\\n\r]*"|true|false|null|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?/g, ']').replace(/(?:^|:|,)(?:\s*\[)+/g, '')));
+}
+
 
 module.exports = {
     summarize: summarize
