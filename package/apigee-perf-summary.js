@@ -96,7 +96,7 @@ finish = function() {
         //handle post processing
         var all = (config.output.indexOf('all') > -1);
 
-        if (all || config.output.indexOf('fileCount') > -1) print("processed " + traceResponse.traceFiles.length + " files.");
+        if (all || config.output.indexOf('fileCount') > -1) print("processed " + traceResponse.traceFiles.length + " files/messages.");
         if (all || config.output.indexOf('policyCount') > -1) {
             print("number of policies: " + policyCount(traceResponse));
         }
@@ -126,10 +126,6 @@ function targets(tr) {
             if (req.target) {
                 req.target.requestWireTime = diffTimeStamps(req.target.requestStart, req.target.requestFinish);
                 req.target.responseWireTime = diffTimeStamps(req.target.responseStart, req.target.responseFinish);
-                //delete req.target.requestStart;
-                //delete req.target.requestFinish;
-                //delete req.target.responseStart;
-                //delete req.target.responseFinished;
                 result.push(req.target);
             }
         });
@@ -257,6 +253,7 @@ var summarize = function(aConfig) {
                 if (!user || !secret) {
                     var errMsg = 'no authorization provided and no env variable(s) for Apigee_User and/or Apigee_Secret';
                     print(errMsg);
+                    print(process.env);
                     throw new Error(errMsg);
                 }
                 config.auth = 'Basic ' + (new Buffer(user + ":" + secret)).toString('base64');
