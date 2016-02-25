@@ -712,9 +712,6 @@ function getStackTrace(e) {
 }
 
 function processDebugSession() {
-    /*
-    curl -X POST --header "Content-Type: application/x-www-url-form-encoded" --header "Authorization: Basic ZGFsbGVuQGFwaWdlZS5jb206NEszbGx5ITIz" "https://api.enterprise.apigee.com/v1/organizations/davidwallen2014/environments/prod/apis/24Solver/revisions/3/debugsessions?session=my%20session&timeout=60000"
-    */
 
     var options = {
         host: 'api.enterprise.apigee.com',
@@ -755,12 +752,7 @@ function processDebugSession() {
 }
 
 function processTraceTransactions() {
-    /*
-    curl -X GET --header "Authorization: Basic ZGFsbGVuQGFwaWdlZS5jb206NEszbGx5ITIz" "https://api.enterprise.apigee.com/v1/organizations/davidwallen2014/environments/prod/apis/24Solver/revisions/3/debugsessions/my%20session/data"
-
-    curl -X GET --header "Accept: application/json" --header "Authorization: Basic ZGFsbGVuQGFwaWdlZS5jb206NEszbGx5ITIz" "https://api.enterprise.apigee.com/v1/organizations/davidwallen2014/environments/prod/apis/24Solver/revisions/3/debugsessions/my%20session/data/f9bd370b-c3cc-4ada-81f7-56bf6c331b3d__716"
-    */
-    var options = {
+       var options = {
         host: 'api.enterprise.apigee.com',
         port: 443,
         path: '/v1/organizations/' + config.org + '/environments/' + config.env + '/apis/' + config.api + '/revisions/' + config.rev + '/debugsessions/' + config.debugSessionId + '/data',
@@ -821,12 +813,6 @@ function processTraceTransactions() {
 }
 
 function processTraceTransaction(id) {
-    /*
-    curl -X GET --header "Authorization: Basic ZGFsbGVuQGFwaWdlZS5jb206NEszbGx5ITIz" "https://api.enterprise.apigee.com/v1/organizations/davidwallen2014/environments/prod/apis/24Solver/revisions/3/debugsessions/my%20session/data"
-
-    curl -X GET --header "Accept: application/json" --header "Authorization: Basic ZGFsbGVuQGFwaWdlZS5jb206NEszbGx5ITIz" "https://api.enterprise.apigee.com/v1/organizations/davidwallen2014/environments/prod/apis/24Solver/revisions/3/debugsessions/my%20session/data/f9bd370b-c3cc-4ada-81f7-56bf6c331b3d__716"
-    */
-    print('in processTraceTransaction');
     var data = '';
 
     var options = {
