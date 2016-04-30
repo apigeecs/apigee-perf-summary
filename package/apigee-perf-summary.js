@@ -65,7 +65,6 @@ outputTraceDetails = function(traceDetails) {
             })
         })
     });
-
     print(table.toString());
 };
 
@@ -104,7 +103,6 @@ finish = function() {
         }
         if (all || config.output.indexOf('policyNameStats') > -1) {
             outputPolciyNameStats(policyNameStats(traceResponse));
-            print("statistics by policy name: " + JSON.stringify(policyNameStats(traceResponse)));
         }
         if (all || config.output.indexOf('traceDetails') > -1) {
             //print("trace details: " + JSON.stringify(traceResponse));
@@ -245,7 +243,7 @@ var summarize = function(aConfig) {
 
             processXMLTraceFiles(config);
         } else {
-            if (config.debug) debugger; //print("loading live trace data");
+            if (config.debug) print("loading live trace data");
 
             if (!config.debugSessionId) config.debugSessionId = uuid();
             if (!config.auth) {
@@ -612,7 +610,6 @@ function getExecution(point, prevStop) {
             }
         }
     } catch (e) {
-        debugger;
         var stack = getStackTrace(e);
         print("exception: " + JSON.stringify(e));
         print(stack);
