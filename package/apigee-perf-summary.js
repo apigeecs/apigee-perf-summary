@@ -4,20 +4,15 @@ var xml2js = require('xml2js'),
     XmlStream = require('xml-stream'),
     AsciiTable = require('ascii-table'),
     _ = require("lodash"),
-    path = require('path'),
-    Stats = require('fast-stats').Stats
-    ;
-
-var variables = {},
+    path = require("path"),
+    Stats = require("fast-stats").Stats,
+    variables = {},
     proxyResponse,
     results = {},
     traceSets = [],
-    fs = require('fs'),
-    xml2js = require('xml2js'),
-    colors = require('colors'),
-    XmlStream = require('xml-stream'),
-    Stream = require('stream'),
-    https = require('https'),
+    fs = require("fs"),
+    Stream = require("stream"),
+    https = require("https"),
 
     traceResponse = {
         "traceFiles": [],
@@ -27,20 +22,24 @@ var variables = {},
     config;
 
 print = function(msg) {
-    if (msg && (typeof msg === 'object')) console.log(JSON.stringify(msg));
-    else console.log(msg);
+    try {
+        if (msg && (typeof msg === 'object')) console.log(JSON.stringify(msg));
+        else console.log(msg);
+    } catch (error) {
+        console.log(error);
+    }
 };
 
 outputTraceDetails = function(traceDetails) {
     var table = new AsciiTable('Trace Details');
     var items = [];
- 
+
     // discover the superset of keys in the package.
     _.forEach(traceDetails.traceFiles, function(tracefile) {
         _.forEach(tracefile.requests, function(request) {
             _.forEach(request.policies, function(policy) {
                 _.forEach(policy, function(value, key) {
-                    if( ! _.includes(items,key)) {
+                    if (!_.includes(items, key)) {
                         items.push(key);
                     }
                 });
@@ -50,15 +49,15 @@ outputTraceDetails = function(traceDetails) {
 
     // build the table header
     table
-      .setHeading(["trace file","application","env","proxy"].concat(items));
-    
+        .setHeading(["trace file", "application", "env", "proxy"].concat(items));
+
     // build the table body
     _.forEach(traceDetails.traceFiles, function(tracefile) {
         _.forEach(tracefile.requests, function(request) {
             var section = [path.basename(tracefile.file), request.application, request.environment, request.proxy];
             table.addRow(section);
             _.forEach(request.policies, function(policy) {
-                var data = ['','','',''];
+                var data = ['', '', '', ''];
                 _.forEach(items, function(itemName) {
                     data.push(policy[itemName]);
                 })
@@ -74,12 +73,12 @@ outputPolciyNameStats = function(policynamestats) {
     var table = new AsciiTable('Policy Statistics by Name');
 
     // this data are calculated, and is guaranteed to be this list (I hope)
-    table.setHeading('policy','count','min','max','avg','σ');
+    table.setHeading('policy', 'count', 'min', 'max', 'avg', 'σ');
 
     // this is the data package values in the order I want to display them
-    var dataOrder = ['count','min','max','averageExecutionDurationMs','executionσ'];
+    var dataOrder = ['count', 'min', 'max', 'averageExecutionDurationMs', 'executionσ'];
 
-    _.forEach(policynamestats, function(stats,policy) {
+    _.forEach(policynamestats, function(stats, policy) {
         var dataDisplay = [policy];
         _.forEach(dataOrder, function(dataItem) {
             dataDisplay.push(stats[dataItem]);
@@ -105,7 +104,7 @@ finish = function() {
         }
         if (all || config.output.indexOf('policyNameStats') > -1) {
             outputPolciyNameStats(policyNameStats(traceResponse));
-            //print("statistics by policy name: " + JSON.stringify(policyNameStats(traceResponse)));
+            print("statistics by policy name: " + JSON.stringify(policyNameStats(traceResponse)));
         }
         if (all || config.output.indexOf('traceDetails') > -1) {
             //print("trace details: " + JSON.stringify(traceResponse));
@@ -176,7 +175,9 @@ function policyNameStats(tr) {
         tr.traceFiles.forEach(function(tf) {
             tf.requests.forEach(function(req) {
                 req.policies.forEach(function(p) {
-                    if (!stats[p.name]) stats[p.name] = new Stats({ bucket_precision: 10 });
+                    if (!stats[p.name]) stats[p.name] = new Stats({
+                        bucket_precision: 10
+                    });
                     if (config.includeDisabled || p.enabled) {
                         stats[p.name].push(p.executionDurationMs);
                     }
@@ -190,14 +191,14 @@ function policyNameStats(tr) {
         print(stack);
     }
 
-    _.forEach(stats, function(stats,policy) {
+    _.forEach(stats, function(stats, policy) {
         var range = stats.range();
         result[policy] = {
             "count": stats.length,
-            "min":range[0],
-            "max":range[1],
-            "averageExecutionDurationMs":stats.μ().toFixed(2),
-            "executionσ":stats.σ().toFixed(2)
+            "min": range[0],
+            "max": range[1],
+            "averageExecutionDurationMs": stats.μ().toFixed(2),
+            "executionσ": stats.σ().toFixed(2)
         };
     });
 
@@ -244,7 +245,7 @@ var summarize = function(aConfig) {
 
             processXMLTraceFiles(config);
         } else {
-            if (config.debug) print("loading live trace data");
+            if (config.debug) debugger; //print("loading live trace data");
 
             if (!config.debugSessionId) config.debugSessionId = uuid();
             if (!config.auth) {
@@ -589,25 +590,33 @@ function getExecution(point, prevStop) {
                 point.DebugInfo.Properties.Property.some(function(property) {
                     if (property.$.name === "type") {
                         result.type = property.$text;
-                        return;
                     }
                     if (property.$.name === "stepDefinition-name") {
                         result.name = property.$text;
-                        return;
                     }
                     if (property.$.name === "stepDefinition-enabled") {
                         result.enabled = property.$text;
-                        return;
+                    }
+                    if (property.$.name === "expression") {
+                        result.expression = property.$text;
+                    }
+                    if (property.$.name === "expressionResult") {
+                        result.expressionResult = property.$text;
                     }
                 });
                 //get the timing
                 result.executionDurationMs = diffTimeStamps(prevStop, result.timestamp);
+                if (result.expression) {
+                    result.name += "(cond=" + result.expressionResult + ")";
+                }
             }
         }
     } catch (e) {
+        debugger;
         var stack = getStackTrace(e);
-        print(JSON.stringify(e));
+        print("exception: " + JSON.stringify(e));
         print(stack);
+        print(JSON.stringify(point.$));
     }
     return result;
 }
@@ -747,7 +756,8 @@ function processDebugSession() {
 }
 
 function processTraceTransactions() {
-       var options = {
+
+    var options = {
         host: 'api.enterprise.apigee.com',
         port: 443,
         path: '/v1/organizations/' + config.org + '/environments/' + config.env + '/apis/' + config.api + '/revisions/' + config.rev + '/debugsessions/' + config.debugSessionId + '/data',
@@ -772,9 +782,13 @@ function processTraceTransactions() {
                 for (var i = d.length; i-- > 0;) {
                     if (!traceMessages[d[i]]) {
                         traceMessages[d[i]] = {
+                            id: d[i],
                             processed: false
                         }; // d[i] is theId of the message 
-                        processTraceTransaction(d[i]);
+                        processTraceTransaction(traceMessages[d[i]]);
+                    }
+                    if (!traceMessages[d[i]].processed) {
+                        processTraceTransaction(traceMessages[d[i]]);
                     }
                 }
                 if (d.length >= 20 || ((new Date() - config.debugStart) > 10 * 60 * 1000)) {
@@ -805,8 +819,9 @@ function processTraceTransactions() {
 
 }
 
-function processTraceTransaction(id) {
-    var data = '';
+function processTraceTransaction(trans) {
+    var data = '',
+        id = trans.id;
 
     var options = {
         host: 'api.enterprise.apigee.com',
@@ -824,8 +839,12 @@ function processTraceTransaction(id) {
             data += d;
         });
         res.on('end', function(d) {
-            //d = JSON.parse(data);
-            processXMLTraceString(id, data);
+            if (data.indexOf("<Completed>true</Completed>") > -1) {
+                processXMLTraceString(id, data);
+                trans.processed = true;
+            } else {
+                if (config.debug) print("ignoring " + JSON.stringify(trans) + " will retry later.");
+            }
         });
 
     });
@@ -834,6 +853,7 @@ function processTraceTransaction(id) {
         print('error in the https call');
         done = true;
         console.error(e);
+        trans.processed = false;
     });
     req.end();
 

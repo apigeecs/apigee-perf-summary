@@ -1,4 +1,4 @@
-perf_summary = require("apigee-perf-summary");
+perf_summary = require("./package/apigee-perf-summary");
 
 perf_summary.summarize({
     debug: true,
@@ -6,7 +6,7 @@ perf_summary.summarize({
     env: 'test',
     api: '24Solver',
     rev: '17',
-    auth: 'Basic ZGFsbGfooFwaWdlZbarjb20nomszbSumITIz',
+    auth: 'Basic ZyouGVuQGrandom5jb206UDfakelKLRS1WsampleSHU1',
     //all,fileCount,policyCount,policyTypeStats,policyNameStats,traceDetails
     output: 'fileCount,policyCount,policyNameStats',
     omitAvgThreshold: 0,
