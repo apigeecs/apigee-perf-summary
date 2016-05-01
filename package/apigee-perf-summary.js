@@ -166,7 +166,7 @@ function outputTraceDetails(traceDetails) {
         })
     });
     print(table.toString());
-};
+}
 
 function outputPolciyNameStats(policynamestats) {
     var table = new AsciiTable("Policy Statistics by Name");
@@ -220,7 +220,9 @@ function diffTimeStamps(start, stop) {
     //inputs are strings
     //09-11-15 18:23:14:687
 
-    if (!start || !stop) return "nan";
+    if (!start || !stop) {
+        return "nan";
+    }
 
     var startArray = start.split(":");
     var stopArray = stop.split(":");
@@ -338,7 +340,7 @@ function uuid() {
     var uuid = "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function(c) {
         var r = (d + Math.random() * 16) % 16 | 0;
         d = Math.floor(d / 16);
-        return (c == "x" ? r : (r & 0x7 | 0x8)).toString(16);
+        return (c === "x" ? r : (r & 0x7 | 0x8)).toString(16);
     });
     return uuid;
 }
@@ -479,110 +481,6 @@ var summarize = function(aConfig) {
         print(stack);
     }
 };
-
-function processXMLTraceStream(id, stream) {
-    try {
-        var xml = new XmlStream(stream),
-            prevStop;
-
-        xml.preserve("Point", true);
-        xml.preserve("DebugInfo", true);
-        xml.preserve("Properties", true);
-        xml.preserve("Property", true);
-        xml.preserve("Headers", true);
-        xml.preserve("Header", true);
-        xml.collect("Property");
-        xml.collect("Headers");
-        xml.collect("Header");
-        xml.collect("Get");
-        xml.collect("Set");
-
-        xml.on("endElement: Point", function(point) {
-            try {
-                if (isMessageStart(point)) {
-                    if (traceResponse.curTraceFile[id].curMessage) traceResponse.curTraceFile[id].requests.push(traceResponse.curTraceFile[id].curMessage);
-                    traceResponse.curTraceFile[id].curMessage = getMessage(point);
-                } else if (isTargetReqStart(point)) {
-                    traceResponse.curTraceFile[id].curMessage.target = getTargetReqStart(point);
-                } else if (isTargetReqSent(point)) {
-                    var res = getTargetReqSent(point);
-                    traceResponse.curTraceFile[id].curMessage.target.requestFinish = res.requestFinished;
-                    traceResponse.curTraceFile[id].curMessage.target.requestSize = res.requestSize;
-                    traceResponse.curTraceFile[id].curMessage.target.statusCode = res.statusCode;
-                } else if (isTargetRespStart(point)) {
-                    var res = getTargetRespStart(point);
-                    //note that status code can change throught he cycle
-                    traceResponse.curTraceFile[id].curMessage.target.responseStart = res.responseStarted;
-                    traceResponse.curTraceFile[id].curMessage.target.statusCode = res.statusCode;
-                } else if (isTargetRespRecvd(point)) {
-                    var res = getTargetRespRecvd(point);
-                    traceResponse.curTraceFile[id].curMessage.target.responseFinish = res.responseFinished;
-                    traceResponse.curTraceFile[id].curMessage.target.responseSize = res.responseSize;
-                    traceResponse.curTraceFile[id].curMessage.target.statusCode = res.statusCode;
-                } else if (isFlowChange(point)) {
-                    //print("in isFlowChange");
-                } else if (isExecution(point)) {
-                    if (!traceResponse.curTraceFile[id].curMessage.policies) traceResponse.curTraceFile[id].curMessage.policies = [];
-                    traceResponse.curTraceFile[id].curMessage.policies.push(getExecution(point, prevStop));
-                }
-                if (point.DebugInfo && point.DebugInfo.Timestamp) prevStop = point.DebugInfo.Timestamp.$text;
-            } catch (e) {
-                var stack = getStackTrace(e);
-            }
-        });
-
-        xml.on("end", function() {
-            if (traceResponse.curTraceFile[id].curMessage) traceResponse.curTraceFile[id].requests.push(traceResponse.curTraceFile[id].curMessage);
-            delete traceResponse.curTraceFile[id].curMessage;
-
-            //if (config.debug) print(file + "=\n" + JSON.stringify(traceResponse.curTraceFile[file]));
-
-            traceResponse.traceFiles.push(traceResponse.curTraceFile[id]);
-            delete(traceResponse.curTraceFile[id]);
-            finish();
-        });
-    } catch (e) {
-        var stack = getStackTrace(e);
-        print("error:");
-        print(e);
-        print(stack);
-
-    }
-}
-
-function processXMLTraceFile(file) {
-    traceResponse.curTraceFile[file] = {
-        "file": file,
-        "requests": []
-    };
-    var stream = fs.createReadStream(file);
-    processXMLTraceStream(file, stream);
-
-}
-
-function processXMLTraceFiles(config) {
-    var files;
-    if (fs.statSync(config.traceFile).isDirectory()) files = getFiles(config.traceFile);
-    else files = [config.traceFile];
-    files.forEach(function(file) {
-        processXMLTraceFile(file);
-    });
-}
-
-function processXMLTraceString(id, str) {
-
-    traceResponse.curTraceFile[id] = {
-        "file": id,
-        "requests": []
-    };
-
-    var myStream = new Stream.Readable();
-    myStream._read = function noop() {};
-    myStream.push(str);
-    myStream.push(null);
-    processXMLTraceStream(id, myStream);
-}
-
 
 function isMessageStart(point) {
     var result = false;
@@ -730,7 +628,6 @@ function getTargetRespStart(point) {
     return result;
 }
 
-
 function getTargetRespRecvd(point) {
     var result = {};
     try {
@@ -847,6 +744,109 @@ function getHeaderValue(headers, name) {
         print(stack);
     }
     return result;
+}
+
+function processXMLTraceStream(id, stream) {
+    try {
+        var xml = new XmlStream(stream),
+            prevStop;
+
+        xml.preserve("Point", true);
+        xml.preserve("DebugInfo", true);
+        xml.preserve("Properties", true);
+        xml.preserve("Property", true);
+        xml.preserve("Headers", true);
+        xml.preserve("Header", true);
+        xml.collect("Property");
+        xml.collect("Headers");
+        xml.collect("Header");
+        xml.collect("Get");
+        xml.collect("Set");
+
+        xml.on("endElement: Point", function(point) {
+            try {
+                if (isMessageStart(point)) {
+                    if (traceResponse.curTraceFile[id].curMessage) traceResponse.curTraceFile[id].requests.push(traceResponse.curTraceFile[id].curMessage);
+                    traceResponse.curTraceFile[id].curMessage = getMessage(point);
+                } else if (isTargetReqStart(point)) {
+                    traceResponse.curTraceFile[id].curMessage.target = getTargetReqStart(point);
+                } else if (isTargetReqSent(point)) {
+                    var res = getTargetReqSent(point);
+                    traceResponse.curTraceFile[id].curMessage.target.requestFinish = res.requestFinished;
+                    traceResponse.curTraceFile[id].curMessage.target.requestSize = res.requestSize;
+                    traceResponse.curTraceFile[id].curMessage.target.statusCode = res.statusCode;
+                } else if (isTargetRespStart(point)) {
+                    var res = getTargetRespStart(point);
+                    //note that status code can change throught he cycle
+                    traceResponse.curTraceFile[id].curMessage.target.responseStart = res.responseStarted;
+                    traceResponse.curTraceFile[id].curMessage.target.statusCode = res.statusCode;
+                } else if (isTargetRespRecvd(point)) {
+                    var res = getTargetRespRecvd(point);
+                    traceResponse.curTraceFile[id].curMessage.target.responseFinish = res.responseFinished;
+                    traceResponse.curTraceFile[id].curMessage.target.responseSize = res.responseSize;
+                    traceResponse.curTraceFile[id].curMessage.target.statusCode = res.statusCode;
+                } else if (isFlowChange(point)) {
+                    //print("in isFlowChange");
+                } else if (isExecution(point)) {
+                    if (!traceResponse.curTraceFile[id].curMessage.policies) traceResponse.curTraceFile[id].curMessage.policies = [];
+                    traceResponse.curTraceFile[id].curMessage.policies.push(getExecution(point, prevStop));
+                }
+                if (point.DebugInfo && point.DebugInfo.Timestamp) prevStop = point.DebugInfo.Timestamp.$text;
+            } catch (e) {
+                var stack = getStackTrace(e);
+            }
+        });
+
+        xml.on("end", function() {
+            if (traceResponse.curTraceFile[id].curMessage) traceResponse.curTraceFile[id].requests.push(traceResponse.curTraceFile[id].curMessage);
+            delete traceResponse.curTraceFile[id].curMessage;
+
+            //if (config.debug) print(file + "=\n" + JSON.stringify(traceResponse.curTraceFile[file]));
+
+            traceResponse.traceFiles.push(traceResponse.curTraceFile[id]);
+            delete(traceResponse.curTraceFile[id]);
+            finish();
+        });
+    } catch (e) {
+        var stack = getStackTrace(e);
+        print("error:");
+        print(e);
+        print(stack);
+
+    }
+}
+
+function processXMLTraceFile(file) {
+    traceResponse.curTraceFile[file] = {
+        "file": file,
+        "requests": []
+    };
+    var stream = fs.createReadStream(file);
+    processXMLTraceStream(file, stream);
+
+}
+
+function processXMLTraceFiles(config) {
+    var files;
+    if (fs.statSync(config.traceFile).isDirectory()) files = getFiles(config.traceFile);
+    else files = [config.traceFile];
+    files.forEach(function(file) {
+        processXMLTraceFile(file);
+    });
+}
+
+function processXMLTraceString(id, str) {
+
+    traceResponse.curTraceFile[id] = {
+        "file": id,
+        "requests": []
+    };
+
+    var myStream = new Stream.Readable();
+    myStream._read = function noop() {};
+    myStream.push(str);
+    myStream.push(null);
+    processXMLTraceStream(id, myStream);
 }
 
 function propertiesContains(props, name, value) {
