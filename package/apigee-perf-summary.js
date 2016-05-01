@@ -197,7 +197,7 @@ function outputPolciyNameStats(policynamestats) {
 }
 
 function countKeys(obj) {
-    if (obj.__count__ !== undefined) { // Old FF
+    if (typeof obj.__count__ !== "undefined") { // Old FF
         return obj.__count__;
     }
     if (Object.keys) { // ES5 
@@ -322,7 +322,7 @@ function processTraceTransaction(trans) {
         res.on("data", function(d) {
             data += d;
         });
-        res.on("end", function(d) {
+        res.on("end", function() {
             if (data.indexOf("<Completed>true</Completed>") > -1) {
                 processXMLTraceString(id, data);
                 trans.processed = true;
@@ -457,23 +457,19 @@ var summarize = function(aConfig) {
     config = aConfig;
     try {
         if (config.traceFile) {
-            if (config.debug) { print("loading xml tracefile"); }
-
+            if (config.debug) {
+                print("loading xml tracefile");
+            }
             processXMLTraceFiles(config);
         } else {
-            if (config.debug) { print("loading live trace data"); }
-
-            if (!config.debugSessionId) { config.debugSessionId = uuid(); }
+            if (config.debug) {
+                print("loading live trace data");
+            }
+            if (!config.debugSessionId) {
+                config.debugSessionId = uuid();
+            }
             if (!config.auth) {
-                var user = process.env.Apigee_User,
-                    secret = process.env.Apigee_Secret;
-                if (!user || !secret) {
-                    var errMsg = "no authorization provided and no env variable(s) for Apigee_User and/or Apigee_Secret";
-                    print(errMsg);
-                    print(process.env);
-                    throw new Error(errMsg);
-                }
-                config.auth = "Basic " + (new Buffer(user + ":" + secret)).toString("base64");
+                config.auth = buildAuth();
             }
             processDebugSession();
         }
@@ -484,6 +480,18 @@ var summarize = function(aConfig) {
         print(stack);
     }
 };
+
+function buildAuth() {
+    var user = process.env.Apigee_User,
+        secret = process.env.Apigee_Secret;
+    if (!user || !secret) {
+        var errMsg = "no authorization provided and no env variable(s) for Apigee_User and/or Apigee_Secret";
+        print(errMsg);
+        print(process.env);
+        throw new Error(errMsg);
+    }
+    return ("Basic " + (new Buffer(user + ":" + secret)).toString("base64"));
+}
 
 function isMessageStart(point) {
     var result = false;
@@ -595,7 +603,7 @@ function isTargetRespRecvd(point) {
     return false;
 }
 
-function getStateChangeTDS(point) {
+/*function getStateChangeTDS(point) {
     var result;
     try {
         if (point.$.id === "StateChange") {
@@ -607,9 +615,9 @@ function getStateChangeTDS(point) {
         print(JSON.stringify(e));
     }
     return result;
-}
+}*/
 
-function isTargetRequest(point) {
+/*function isTargetRequest(point) {
     try {
         if (point.$.id === "FlowInfo" && point.DebugInfo && propertiesContains(point.DebugInfo.Properties.Property, "loadbalancing.targetserver")) {
             return true;
@@ -619,7 +627,7 @@ function isTargetRequest(point) {
         print(JSON.stringify(e));
     }
     return false;
-}
+}*/
 
 function getTargetReqStart(point) {
     var result = {};
@@ -707,7 +715,7 @@ function isFlowChange(point) {
     return result;
 }
 
-function getFlow(point, prevStop) {
+/*function getFlow(point, prevStop) {
     var result;
     try {
         if (point.$.id === "StateChange") {
@@ -729,7 +737,7 @@ function getFlow(point, prevStop) {
         print(stack);
     }
     return result;
-}
+}*/
 
 function isExecution(point) {
     return (point.$.id === "Execution");
@@ -822,6 +830,9 @@ function processXMLTraceStream(id, stream) {
                 if (point.DebugInfo && point.DebugInfo.Timestamp) { prevStop = point.DebugInfo.Timestamp.$text; }
             } catch (e) {
                 var stack = getStackTrace(e);
+                print("error:");
+                print(e);
+                print(stack);
             }
         });
 
@@ -840,13 +851,12 @@ function processXMLTraceStream(id, stream) {
         print("error:");
         print(e);
         print(stack);
-
     }
 }
 
 function processXMLTraceFile(file) {
     traceResponse.curTraceFile[file] = {
-        "file": file,
+        file,
         "requests": []
     };
     var stream = fs.createReadStream(file);
@@ -876,7 +886,7 @@ function processXMLTraceString(id, str) {
     processXMLTraceStream(id, myStream);
 }
 
-function interval(func, wait, times) {
+/*function interval(func, wait, times) {
     var interv = (function(w, t) {
         return function() {
             if (typeof t === "undefined" || t-- > 0) {
@@ -892,8 +902,8 @@ function interval(func, wait, times) {
     }(wait, times));
 
     setTimeout(interv, wait);
-}
+}*/
 
 module.exports = {
-    "summarize": summarize
+    summarize
 };
