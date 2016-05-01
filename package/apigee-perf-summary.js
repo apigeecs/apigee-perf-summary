@@ -195,16 +195,6 @@ function outputPolciyNameStats(policynamestats) {
     print(table.toString());
 }
 
-function countKeys(obj) {
-    if (typeof obj.__count__ !== "undefined") { // Old FF
-        return obj.__count__;
-    }
-    if (Object.keys) { // ES5 
-        return Object.keys(obj).length;
-    }
-    return countEEKeys(obj);
-}
-
 function countEEKeys(obj) {
     // Everything else:
     var c = 0,
@@ -215,6 +205,16 @@ function countEEKeys(obj) {
         }
     }
     return c;
+}
+
+function countKeys(obj) {
+    if (typeof obj.__count__ !== "undefined") { // Old FF
+        return obj.__count__;
+    }
+    if (Object.keys) { // ES5 
+        return Object.keys(obj).length;
+    }
+    return countEEKeys(obj);
 }
 
 function policyCount(tr) {
