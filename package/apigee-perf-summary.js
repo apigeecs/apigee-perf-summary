@@ -17,12 +17,15 @@ var XmlStream = require("xml-stream"),
 
 function print(msg) {
     try {
-        if (msg && (typeof msg === "object")) console.log(JSON.stringify(msg));
-        else console.log(msg);
+        if (msg && (typeof msg === "object")) {
+            console.log(JSON.stringify(msg));
+        } else {
+            console.log(msg);
+        }
     } catch (error) {
         console.log(error);
     }
-};
+}
 
 function getStackTrace(e) {
     return e.stack.replace(/^[^\(]+?[\n$]/gm, "")
@@ -274,37 +277,20 @@ function finish() {
     }
 };
 
-function processXMLTraceFile(file) {
-    traceResponse.curTraceFile[file] = {
-        "file": file,
-        "requests": []
-    };
-    var stream = fs.createReadStream(file);
-    processXMLTraceStream(file, stream);
-
-}
-
 function getFiles(dir, files_) {
     files_ = files_ || [];
     var files = fs.readdirSync(dir);
     for (var i in files) {
-        var name = dir + "/" + files[i];
-        if (fs.statSync(name).isDirectory()) {
-            getFiles(name, files_);
-        } else {
-            files_.push(name);
+        if ({}.hasOwnProperty.call(files, i)) {
+            var name = dir + "/" + files[i];
+            if (fs.statSync(name).isDirectory()) {
+                getFiles(name, files_);
+            } else {
+                files_.push(name);
+            }
         }
     }
     return files_;
-}
-
-function processXMLTraceFiles(config) {
-    var files;
-    if (fs.statSync(config.traceFile).isDirectory()) files = getFiles(config.traceFile);
-    else files = [config.traceFile];
-    files.forEach(function(file) {
-        processXMLTraceFile(file);
-    });
 }
 
 function processTraceTransaction(trans) {
@@ -356,6 +342,48 @@ function uuid() {
     });
     return uuid;
 }
+
+function isJson(blob) {
+    return (/^[\],:{}\s]*$/.test(blob.replace(/\\["\\\/bfnrtu]/g, "@").replace(/"[^"\\\n\r]*"|true|false|null|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?/g, "]").replace(/(?:^|:|,)(?:\s*\[)+/g, "")));
+}
+
+function processDebugSession() {
+    var options = {
+        host: "api.enterprise.apigee.com",
+        port: 443,
+        path: "/v1/organizations/" + config.org + "/environments/" + config.env + "/apis/" + config.api + "/revisions/" + config.rev + "/debugsessions?session=" + config.debugSessionId,
+        method: "POST",
+        headers: {
+            //Accept: "application/json",
+            Authorization: config.auth,
+            "Content-Type": "application/x-www-url-form-encoded"
+        }
+    };
+
+    var req = https.request(options, function(res) {
+        res.setEncoding("utf8");
+        res.on("data", function(d) {
+            d = JSON.parse(d);
+            if (!d.name) {
+                print(d);
+                print(path);
+                throw new Error(d);
+            }
+            config.debugSessionId = d.name;
+            config.debugStart = new Date();
+            //now we want to call the retrieval loop
+            processTraceTransactions();
+        });
+    });
+
+    req.on("error", function(e) {
+        print("error in the https call");
+        console.error(e);
+        exit();
+    });
+    req.end();
+}
+
 
 function processTraceTransactions() {
     var options = {
@@ -419,45 +447,6 @@ function processTraceTransactions() {
     req.end();
 
 }
-
-
-function processDebugSession() {
-    var options = {
-        host: "api.enterprise.apigee.com",
-        port: 443,
-        path: "/v1/organizations/" + config.org + "/environments/" + config.env + "/apis/" + config.api + "/revisions/" + config.rev + "/debugsessions?session=" + config.debugSessionId,
-        method: "POST",
-        headers: {
-            //Accept: "application/json",
-            Authorization: config.auth,
-            "Content-Type": "application/x-www-url-form-encoded"
-        }
-    };
-
-    var req = https.request(options, function(res) {
-        res.setEncoding("utf8");
-        res.on("data", function(d) {
-            d = JSON.parse(d);
-            if (!d.name) {
-                print(d);
-                print(path);
-                throw new Error(d);
-            }
-            config.debugSessionId = d.name;
-            config.debugStart = new Date();
-            //now we want to call the retrieval loop
-            processTraceTransactions();
-        });
-    });
-
-    req.on("error", function(e) {
-        print("error in the https call");
-        console.error(e);
-        exit();
-    });
-    req.end();
-}
-
 
 var summarize = function(aConfig) {
     config = aConfig;
@@ -561,7 +550,24 @@ function processXMLTraceStream(id, stream) {
     }
 }
 
+function processXMLTraceFile(file) {
+    traceResponse.curTraceFile[file] = {
+        "file": file,
+        "requests": []
+    };
+    var stream = fs.createReadStream(file);
+    processXMLTraceStream(file, stream);
 
+}
+
+function processXMLTraceFiles(config) {
+    var files;
+    if (fs.statSync(config.traceFile).isDirectory()) files = getFiles(config.traceFile);
+    else files = [config.traceFile];
+    files.forEach(function(file) {
+        processXMLTraceFile(file);
+    });
+}
 
 function processXMLTraceString(id, str) {
 
@@ -885,11 +891,6 @@ function interval(func, wait, times) {
 
     setTimeout(interv, wait);
 };
-
-function isJson(blob) {
-    return (/^[\],:{}\s]*$/.test(blob.replace(/\\["\\\/bfnrtu]/g, "@").replace(/"[^"\\\n\r]*"|true|false|null|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?/g, "]").replace(/(?:^|:|,)(?:\s*\[)+/g, "")));
-}
-
 
 module.exports = {
     summarize: summarize
