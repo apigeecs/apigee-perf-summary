@@ -65,7 +65,7 @@ function cleanupStats(result) {
         print(JSON.stringify(e));
         print(stack);
     }
-    return result
+    return result;
 }
 
 function policyTypeStats(tr) {
@@ -73,18 +73,23 @@ function policyTypeStats(tr) {
     tr.traceFiles.forEach(function(tf) {
         tf.requests.forEach(function(req) {
             req.policies.forEach(function(p) {
-                if (!result[p.type]) result[p.type] = {
-                    "count": 0,
-                    "min": 0,
-                    "max": 0,
-                    "totalExecutionDurationMs": 0
-                };
+                if (!result[p.type]) {
+                    result[p.type] = {
+                        "count": 0,
+                        "min": 0,
+                        "max": 0,
+                        "totalExecutionDurationMs": 0
+                    };
+                }
                 if (config.includeDisabled || p.enabled) {
                     result[p.type].count++;
                     result[p.type].totalExecutionDurationMs += p.executionDurationMs;
                     result[p.type].averageExecutionDurationMs = result[p.type].totalExecutionDurationMs / result[p.type].count;
-                    if (p.executionDurationMs < result[p.type].min) result[p.type].min = p.executionDurationMs;
-                    if (p.executionDurationMs > result[p.type].max) result[p.type].max = p.executionDurationMs;
+                    if (p.executionDurationMs < result[p.type].min) { 
+                        result[p.type].min = p.executionDurationMs; }
+                    if (p.executionDurationMs > result[p.type].max) {
+                        result[p.type].max = p.executionDurationMs;
+                    }
                 }
             });
         });
@@ -100,9 +105,9 @@ function policyNameStats(tr) {
         tr.traceFiles.forEach(function(tf) {
             tf.requests.forEach(function(req) {
                 req.policies.forEach(function(p) {
-                    if (!stats[p.name]) stats[p.name] = new Stats({
-                        bucket_precision: 10
-                    });
+                    if (!stats[p.name]) {stats[p.name] = new Stats({
+                                            bucket_precision: 10
+                                        });}
                     if (config.includeDisabled || p.enabled) {
                         stats[p.name].push(p.executionDurationMs);
                     }
@@ -319,7 +324,7 @@ function processTraceTransaction(trans) {
                 processXMLTraceString(id, data);
                 trans.processed = true;
             } else {
-                if (config.debug) print("ignoring " + JSON.stringify(trans) + " will retry later.");
+                if (config.debug) {print("ignoring " + JSON.stringify(trans) + " will retry later.");}
             }
         });
 
@@ -380,7 +385,6 @@ function processDebugSession() {
     req.on("error", function(e) {
         print("error in the https call");
         console.error(e);
-        exit();
     });
     req.end();
 }
@@ -441,7 +445,6 @@ function processTraceTransactions() {
 
     req.on("error", function(e) {
         print("error in the https call");
-        done = true;
         console.error(e);
     });
     req.end();
@@ -627,6 +630,24 @@ function getTargetReqStart(point) {
     return result;
 }
 
+function getHeaderValue(headers, name) {
+    var result = "";
+    try {
+        headers.some(function(header) {
+            if (header.$.name === name) {
+                result = header.$text;
+                return;
+            }
+        });
+    } catch (e) {
+        print("error in getHeaderValue");
+        var stack = getStackTrace(e);
+        print(JSON.stringify(e));
+        print(stack);
+    }
+    return result;
+}
+
 function getTargetReqSent(point) {
     var result = {};
     try {
@@ -750,24 +771,6 @@ function getExecution(point, prevStop) {
     return result;
 }
 
-function getHeaderValue(headers, name) {
-    var result = "";
-    try {
-        headers.some(function(header) {
-            if (header.$.name === name) {
-                result = header.$text;
-                return;
-            }
-        });
-    } catch (e) {
-        print("error in getHeaderValue");
-        var stack = getStackTrace(e);
-        print(JSON.stringify(e));
-        print(stack);
-    }
-    return result;
-}
-
 function processXMLTraceStream(id, stream) {
     try {
         var xml = new XmlStream(stream),
@@ -788,39 +791,39 @@ function processXMLTraceStream(id, stream) {
         xml.on("endElement: Point", function(point) {
             try {
                 if (isMessageStart(point)) {
-                    if (traceResponse.curTraceFile[id].curMessage) traceResponse.curTraceFile[id].requests.push(traceResponse.curTraceFile[id].curMessage);
+                    if (traceResponse.curTraceFile[id].curMessage) {traceResponse.curTraceFile[id].requests.push(traceResponse.curTraceFile[id].curMessage);}
                     traceResponse.curTraceFile[id].curMessage = getMessage(point);
                 } else if (isTargetReqStart(point)) {
                     traceResponse.curTraceFile[id].curMessage.target = getTargetReqStart(point);
                 } else if (isTargetReqSent(point)) {
-                    var theRes = getTargetReqSent(point);
-                    traceResponse.curTraceFile[id].curMessage.target.requestFinish = theRes.requestFinished;
-                    traceResponse.curTraceFile[id].curMessage.target.requestSize = theRes.requestSize;
-                    traceResponse.curTraceFile[id].curMessage.target.statusCode = theRes.statusCode;
+                    var theRes1 = getTargetReqSent(point);
+                    traceResponse.curTraceFile[id].curMessage.target.requestFinish = theRes1.requestFinished;
+                    traceResponse.curTraceFile[id].curMessage.target.requestSize = theRes1.requestSize;
+                    traceResponse.curTraceFile[id].curMessage.target.statusCode = theRes1.statusCode;
                 } else if (isTargetRespStart(point)) {
-                    var theRes = getTargetRespStart(point);
+                    var theRes2 = getTargetRespStart(point);
                     //note that status code can change throught he cycle
-                    traceResponse.curTraceFile[id].curMessage.target.responseStart = theRes.responseStarted;
-                    traceResponse.curTraceFile[id].curMessage.target.statusCode = theRes.statusCode;
+                    traceResponse.curTraceFile[id].curMessage.target.responseStart = theRes2.responseStarted;
+                    traceResponse.curTraceFile[id].curMessage.target.statusCode = theRes2.statusCode;
                 } else if (isTargetRespRecvd(point)) {
-                    var theRes = getTargetRespRecvd(point);
-                    traceResponse.curTraceFile[id].curMessage.target.responseFinish = theRes.responseFinished;
-                    traceResponse.curTraceFile[id].curMessage.target.responseSize = theRes.responseSize;
-                    traceResponse.curTraceFile[id].curMessage.target.statusCode = theRes.statusCode;
+                    var theRes3 = getTargetRespRecvd(point);
+                    traceResponse.curTraceFile[id].curMessage.target.responseFinish = theRes3.responseFinished;
+                    traceResponse.curTraceFile[id].curMessage.target.responseSize = theRes3.responseSize;
+                    traceResponse.curTraceFile[id].curMessage.target.statusCode = theRes3.statusCode;
                 } else if (isFlowChange(point)) {
                     //print("in isFlowChange");
                 } else if (isExecution(point)) {
                     if (!traceResponse.curTraceFile[id].curMessage.policies) traceResponse.curTraceFile[id].curMessage.policies = [];
                     traceResponse.curTraceFile[id].curMessage.policies.push(getExecution(point, prevStop));
                 }
-                if (point.DebugInfo && point.DebugInfo.Timestamp) prevStop = point.DebugInfo.Timestamp.$text;
+                if (point.DebugInfo && point.DebugInfo.Timestamp) {prevStop = point.DebugInfo.Timestamp.$text;}
             } catch (e) {
                 var stack = getStackTrace(e);
             }
         });
 
         xml.on("end", function() {
-            if (traceResponse.curTraceFile[id].curMessage) traceResponse.curTraceFile[id].requests.push(traceResponse.curTraceFile[id].curMessage);
+            if (traceResponse.curTraceFile[id].curMessage) {traceResponse.curTraceFile[id].requests.push(traceResponse.curTraceFile[id].curMessage);}
             delete traceResponse.curTraceFile[id].curMessage;
 
             //if (config.debug) print(file + "=\n" + JSON.stringify(traceResponse.curTraceFile[file]));
@@ -850,8 +853,8 @@ function processXMLTraceFile(file) {
 
 function processXMLTraceFiles(config) {
     var files;
-    if (fs.statSync(config.traceFile).isDirectory()) files = getFiles(config.traceFile);
-    else files = [config.traceFile];
+    if (fs.statSync(config.traceFile).isDirectory()) {files = getFiles(config.traceFile);}
+    else {files = [config.traceFile];}
     files.forEach(function(file) {
         processXMLTraceFile(file);
     });
@@ -887,7 +890,7 @@ function interval(func, wait, times) {
     }(wait, times);
 
     setTimeout(interv, wait);
-};
+}
 
 module.exports = {
     summarize: summarize
