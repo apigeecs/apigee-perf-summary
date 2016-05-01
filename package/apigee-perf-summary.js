@@ -73,24 +73,19 @@ function policyTypeStats(tr) {
     tr.traceFiles.forEach(function(tf) {
         tf.requests.forEach(function(req) {
             req.policies.forEach(function(p) {
-                if (!result[p.type]) {
-                    result[p.type] = {
-                        "count": 0,
-                        "min": 0,
-                        "max": 0,
-                        "totalExecutionDurationMs": 0
-                    };
-                }
+                result[type] = result[type] || {
+                    "count": 0,
+                    "min": 0,
+                    "max": 0,
+                    "totalExecutionDurationMs": 0
+                };
+
                 if (config.includeDisabled || p.enabled) {
                     result[p.type].count++;
                     result[p.type].totalExecutionDurationMs += p.executionDurationMs;
                     result[p.type].averageExecutionDurationMs = result[p.type].totalExecutionDurationMs / result[p.type].count;
-                    if (p.executionDurationMs < result[p.type].min) {
-                        result[p.type].min = p.executionDurationMs;
-                    }
-                    if (p.executionDurationMs > result[p.type].max) {
-                        result[p.type].max = p.executionDurationMs;
-                    }
+                    result[p.type].min = min(p.executionDurationMs, result[p.type].min);
+                    result[p.type].max = Math.max(p.executionDurationMs, result[p.type].max);
                 }
             });
         });
@@ -751,34 +746,29 @@ function isExecution(point) {
     return (point.$.id === "Execution");
 }
 
+function mapProperty(property, match, result, field) {
+    if (property.$.name === match) {
+        result[field] = property.$text;
+    }
+    return result;
+}
+
 function getExecution(point, prevStop) {
     var result = {};
     try {
-        if (point.$.id === "Execution") {
-            if (point.DebugInfo) {
-                result.timestamp = point.DebugInfo.Timestamp.$text;
-                point.DebugInfo.Properties.Property.some(function(property) {
-                    if (property.$.name === "type") {
-                        result.type = property.$text;
-                    }
-                    if (property.$.name === "stepDefinition-name") {
-                        result.name = property.$text;
-                    }
-                    if (property.$.name === "stepDefinition-enabled") {
-                        result.enabled = property.$text;
-                    }
-                    if (property.$.name === "expression") {
-                        result.expression = property.$text;
-                    }
-                    if (property.$.name === "expressionResult") {
-                        result.expressionResult = property.$text;
-                    }
-                });
-                //get the timing
-                result.executionDurationMs = diffTimeStamps(prevStop, result.timestamp);
-                if (result.expression) {
-                    result.name += "(cond=" + result.expressionResult + ")";
-                }
+        if (point.$.id === "Execution" && point.DebugInfo) {
+            result.timestamp = point.DebugInfo.Timestamp.$text;
+            point.DebugInfo.Properties.Property.some(function(property) {
+                result = mapProperty(property, "type", result, "type");
+                result = mapProperty(property, "stepDefinition-name", result, "name");
+                result = mapProperty(property, "stepDefinition-enabled", result, "enabled");
+                result = mapProperty(property, "expression", result, "expression");
+                result = mapProperty(property, "expressionResult", result, "expressionResult");
+            });
+            //get the timing
+            result.executionDurationMs = diffTimeStamps(prevStop, result.timestamp);
+            if (result.expression) {
+                result.name += "(cond=" + result.expressionResult + ")";
             }
         }
     } catch (e) {
