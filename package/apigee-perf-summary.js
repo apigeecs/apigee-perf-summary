@@ -322,8 +322,10 @@ function processTraceTransaction(trans) {
         });
         res.on("end", function() {
             if (data.indexOf("<Completed>true</Completed>") > -1) {
+                trans.inProcess = true;
                 processXMLTraceString(id, data);
                 trans.processed = true;
+                trans.inProces = false;
             } else {
                 if (config.debug) { print("ignoring " + JSON.stringify(trans) + " will retry later."); }
             }
@@ -397,14 +399,12 @@ function processTransactionPayload(str) {
     //then we want to add it to our array
     //then call processTransaction on it
     for (var i = d.length; i-- > 0;) {
-        if (!traceMessages[d[i]]) {
-            traceMessages[d[i]] = {
-                id: d[i],
-                processed: false
-            }; // d[i] is theId of the message 
-            processTraceTransaction(traceMessages[d[i]]);
-        }
-        if (!traceMessages[d[i]].processed) {
+        traceMessages[d[i]] = traceMessages[d[i]] || {
+            id: d[i],
+            processed: false,
+            inProcess: false
+        };
+        if (!traceMessages[d[i]].processed && !traceMessages[d[i]].inProcess) {
             processTraceTransaction(traceMessages[d[i]]);
         }
     }
