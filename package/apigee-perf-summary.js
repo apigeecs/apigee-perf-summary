@@ -35,7 +35,7 @@ function getStackTrace(e) {
 }
 
 function cleanupStats(result) {
-    var key, overAvgThreshold, overMaxThreshold, deleteKey;
+    var key, overAvgThreshold, overMaxThreshold, deleteKey, hasAvgThreshold, hasMaxThreshold;
     try {
         for (key in result) {
             if ({}.hasOwnProperty.call(result, key)) {
@@ -46,11 +46,11 @@ function cleanupStats(result) {
                     hasMaxThreshold = ("omitMaxThreshold" in config);
 
                 //overly expressive for clarity sake
-                if (hasAvgThreshold && result[key].averageExecutionDurationMs >= config.omitAvgThreshold) overAvgThreshold = true;
-                if (hasAvgThreshold && result[key].max >= config.omitMaxThreshold) overAvgThreshold = true;
-                if (hasAvgThreshold && hasMaxThreshold && (overAvgThreshold || overMaxThreshold)) deleteKey = false;
-                if (hasAvgThreshold && !hasMaxThreshold && overAvgThreshold) deleteKey = false;
-                if (!hasAvgThreshold && hasMaxThreshold && overMaxThreshold) deleteKey = false;
+                if (hasAvgThreshold && result[key].averageExecutionDurationMs >= config.omitAvgThreshold) { overAvgThreshold = true; }
+                if (hasAvgThreshold && result[key].max >= config.omitMaxThreshold) { overAvgThreshold = true; }
+                if (hasAvgThreshold && hasMaxThreshold && (overAvgThreshold || overMaxThreshold)) { deleteKey = false; }
+                if (hasAvgThreshold && !hasMaxThreshold && overAvgThreshold) { deleteKey = false; }
+                if (!hasAvgThreshold && hasMaxThreshold && overMaxThreshold) { deleteKey = false; }
 
                 if (deleteKey) {
                     delete result[key];
@@ -160,10 +160,10 @@ function outputTraceDetails(traceDetails) {
                 var data = ["", "", "", ""];
                 _.forEach(items, function(itemName) {
                     data.push(policy[itemName]);
-                })
+                });
                 table.addRow(data);
-            })
-        })
+            });
+        });
     });
     print(table.toString());
 }
@@ -277,7 +277,7 @@ function finish() {
             print(JSON.stringify(traceResponse));
         }
     }
-};
+}
 
 function getFiles(dir, files_) {
     files_ = files_ || [];
@@ -327,7 +327,6 @@ function processTraceTransaction(trans) {
 
     req.on("error", function(e) {
         print("error in the https call");
-        done = true;
         console.error(e);
         trans.processed = false;
     });
@@ -337,12 +336,12 @@ function processTraceTransaction(trans) {
 
 function uuid() {
     var d = new Date().getTime();
-    var uuid = "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function(c) {
+    var theUuid = "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function(c) {
         var r = (d + Math.random() * 16) % 16 | 0;
         d = Math.floor(d / 16);
         return (c === "x" ? r : (r & 0x7 | 0x8)).toString(16);
     });
-    return uuid;
+    return theUuid;
 }
 
 function isJson(blob) {
@@ -385,7 +384,6 @@ function processDebugSession() {
     });
     req.end();
 }
-
 
 function processTraceTransactions() {
     var options = {
@@ -447,20 +445,19 @@ function processTraceTransactions() {
         console.error(e);
     });
     req.end();
-
 }
 
 var summarize = function(aConfig) {
     config = aConfig;
     try {
         if (config.traceFile) {
-            if (config.debug) print("loading xml tracefile");
+            if (config.debug) { print("loading xml tracefile"); }
 
             processXMLTraceFiles(config);
         } else {
-            if (config.debug) print("loading live trace data");
+            if (config.debug) { print("loading live trace data"); }
 
-            if (!config.debugSessionId) config.debugSessionId = uuid();
+            if (!config.debugSessionId) { config.debugSessionId = uuid(); }
             if (!config.auth) {
                 var user = process.env.Apigee_User,
                     secret = process.env.Apigee_Secret;
@@ -513,6 +510,31 @@ function getMessage(point) {
                 }
             });
         }
+    }
+    return result;
+}
+
+function propertiesContains(props, name, value) {
+    var result = false;
+    try {
+        props.some(function(property) {
+            if (property.$.name === name) {
+                if (value) {
+                    if (property.$text === value) {
+                        result = true;
+                    }
+                } else {
+                    //if we don"t have a value to compare to
+                    result = true;
+                }
+                return;
+            }
+        });
+    } catch (e) {
+        print("error in propertiesContains");
+        var stack = getStackTrace(e);
+        print(JSON.stringify(e));
+        print(stack);
     }
     return result;
 }
@@ -771,20 +793,20 @@ function processXMLTraceStream(id, stream) {
                 } else if (isTargetReqStart(point)) {
                     traceResponse.curTraceFile[id].curMessage.target = getTargetReqStart(point);
                 } else if (isTargetReqSent(point)) {
-                    var res = getTargetReqSent(point);
-                    traceResponse.curTraceFile[id].curMessage.target.requestFinish = res.requestFinished;
-                    traceResponse.curTraceFile[id].curMessage.target.requestSize = res.requestSize;
-                    traceResponse.curTraceFile[id].curMessage.target.statusCode = res.statusCode;
+                    var theRes = getTargetReqSent(point);
+                    traceResponse.curTraceFile[id].curMessage.target.requestFinish = theRes.requestFinished;
+                    traceResponse.curTraceFile[id].curMessage.target.requestSize = theRes.requestSize;
+                    traceResponse.curTraceFile[id].curMessage.target.statusCode = theRes.statusCode;
                 } else if (isTargetRespStart(point)) {
-                    var res = getTargetRespStart(point);
+                    var theRes = getTargetRespStart(point);
                     //note that status code can change throught he cycle
-                    traceResponse.curTraceFile[id].curMessage.target.responseStart = res.responseStarted;
-                    traceResponse.curTraceFile[id].curMessage.target.statusCode = res.statusCode;
+                    traceResponse.curTraceFile[id].curMessage.target.responseStart = theRes.responseStarted;
+                    traceResponse.curTraceFile[id].curMessage.target.statusCode = theRes.statusCode;
                 } else if (isTargetRespRecvd(point)) {
-                    var res = getTargetRespRecvd(point);
-                    traceResponse.curTraceFile[id].curMessage.target.responseFinish = res.responseFinished;
-                    traceResponse.curTraceFile[id].curMessage.target.responseSize = res.responseSize;
-                    traceResponse.curTraceFile[id].curMessage.target.statusCode = res.statusCode;
+                    var theRes = getTargetRespRecvd(point);
+                    traceResponse.curTraceFile[id].curMessage.target.responseFinish = theRes.responseFinished;
+                    traceResponse.curTraceFile[id].curMessage.target.responseSize = theRes.responseSize;
+                    traceResponse.curTraceFile[id].curMessage.target.statusCode = theRes.statusCode;
                 } else if (isFlowChange(point)) {
                     //print("in isFlowChange");
                 } else if (isExecution(point)) {
@@ -847,31 +869,6 @@ function processXMLTraceString(id, str) {
     myStream.push(str);
     myStream.push(null);
     processXMLTraceStream(id, myStream);
-}
-
-function propertiesContains(props, name, value) {
-    var result = false;
-    try {
-        props.some(function(property) {
-            if (property.$.name === name) {
-                if (value) {
-                    if (property.$text === value) {
-                        result = true;
-                    }
-                } else {
-                    //if we don"t have a value to compare to
-                    result = true;
-                }
-                return;
-            }
-        });
-    } catch (e) {
-        print("error in propertiesContains");
-        var stack = getStackTrace(e);
-        print(JSON.stringify(e));
-        print(stack);
-    }
-    return result;
 }
 
 function interval(func, wait, times) {
