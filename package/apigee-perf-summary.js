@@ -73,7 +73,7 @@ function policyTypeStats(tr) {
     tr.traceFiles.forEach(function(tf) {
         tf.requests.forEach(function(req) {
             req.policies.forEach(function(p) {
-                result[type] = result[type] || {
+                result[p.type] = result[p.type] || {
                     "count": 0,
                     "min": 0,
                     "max": 0,
@@ -84,7 +84,7 @@ function policyTypeStats(tr) {
                     result[p.type].count++;
                     result[p.type].totalExecutionDurationMs += p.executionDurationMs;
                     result[p.type].averageExecutionDurationMs = result[p.type].totalExecutionDurationMs / result[p.type].count;
-                    result[p.type].min = min(p.executionDurationMs, result[p.type].min);
+                    result[p.type].min = Math.min(p.executionDurationMs, result[p.type].min);
                     result[p.type].max = Math.max(p.executionDurationMs, result[p.type].max);
                 }
             });
@@ -511,20 +511,22 @@ function isMessageStart(point) {
     return result;
 }
 
+function mapProperty(property, match, result, field) {
+    if (property.$.name === match) {
+        result[field] = property.$text;
+    }
+    return result;
+}
+
 function getMessage(point) {
     var result = {};
     if (point.$.id === "StateChange") {
         if (point.RequestMessage) {
             point.RequestMessage.Headers[0].Header.forEach(function(header) {
-                if (header.$.name === "X-Apigee.application") {
-                    result.application = header.$text;
-                } else if (header.$.name === "X-Apigee.environment") {
-                    result.environment = header.$text;
-                } else if (header.$.name === "X-Apigee.proxy") {
-                    result.proxy = header.$text;
-                } else if (header.$.name === "X-Apigee.version") {
-                    result.version = header.$text;
-                }
+                result = mapProperty(header, "X-Apigee.application", result, "application");
+                result = mapProperty(header, "X-Apigee.environment", result, "environment");
+                result = mapProperty(header, "X-Apigee.proxy", result, "proxy");
+                result = mapProperty(header, "X-Apigee.version", result, "version");
             });
         }
     }
@@ -744,13 +746,6 @@ function isFlowChange(point) {
 
 function isExecution(point) {
     return (point.$.id === "Execution");
-}
-
-function mapProperty(property, match, result, field) {
-    if (property.$.name === match) {
-        result[field] = property.$text;
-    }
-    return result;
 }
 
 function getExecution(point, prevStop) {
