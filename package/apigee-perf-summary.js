@@ -95,7 +95,6 @@ function policyTypeStats(tr) {
             });
         });
     });
-
     return cleanupStats(result);
 }
 
@@ -203,6 +202,10 @@ function countKeys(obj) {
     if (Object.keys) { // ES5 
         return Object.keys(obj).length;
     }
+    return countEEKeys(obj);
+}
+
+function countEEKeys(obj) {
     // Everything else:
     var c = 0,
         p;
@@ -330,7 +333,6 @@ function processTraceTransaction(trans) {
                 if (config.debug) { print("ignoring " + JSON.stringify(trans) + " will retry later."); }
             }
         });
-
     });
 
     req.on("error", function(e) {
@@ -392,53 +394,59 @@ function processDebugSession() {
     req.end();
 }
 
+function processTransactionPayload(str) {
+    var d = JSON.parse(str);
+    //d contains an array of transactions identities
+    //we want to work backwards through the result
+    //if the transaction id isn"t in our transactions array
+    //then we want to add it to our array
+    //then call processTransaction on it
+    for (var i = d.length; i-- > 0;) {
+        if (!traceMessages[d[i]]) {
+            traceMessages[d[i]] = {
+                id: d[i],
+                processed: false
+            }; // d[i] is theId of the message 
+            processTraceTransaction(traceMessages[d[i]]);
+        }
+        if (!traceMessages[d[i]].processed) {
+            processTraceTransaction(traceMessages[d[i]]);
+        }
+    }
+    if (d.length >= 20 || ((new Date() - config.debugStart) > 10 * 60 * 1000)) {
+        config.debugSessionId = uuid();
+        processDebugSession();
+        return;
+    } else {
+        processTraceTransactions();
+    }
+}
+
 function processTraceTransactions() {
     var options = {
-        host: "api.enterprise.apigee.com",
-        port: 443,
-        path: "/v1/organizations/" + config.org + "/environments/" + config.env + "/apis/" + config.api + "/revisions/" + config.rev + "/debugsessions/" + config.debugSessionId + "/data",
-        method: "GET",
-        headers: {
-            Accept: "application/json",
-            Authorization: config.auth
-        }
-    };
+            host: "api.enterprise.apigee.com",
+            port: 443,
+            path: "/v1/organizations/" + config.org + "/environments/" + config.env + "/apis/" + config.api + "/revisions/" + config.rev + "/debugsessions/" + config.debugSessionId + "/data",
+            method: "GET",
+            headers: {
+                Accept: "application/json",
+                Authorization: config.auth
+            }
+        },
+        data = "";
 
     var req = https.request(options, function(res) {
         res.setEncoding("utf8");
         res.on("data", function(d) {
-            //need to test is we have good JSON
-            if (isJson(d)) {
-                d = JSON.parse(d);
-                //d contains an array of transactions identities
-                //we want to work backwards through the result
-                //if the transaction id isn"t in our transactions array
-                //then we want to add it to our array
-                //then call processTransaction on it
-                for (var i = d.length; i-- > 0;) {
-                    if (!traceMessages[d[i]]) {
-                        traceMessages[d[i]] = {
-                            id: d[i],
-                            processed: false
-                        }; // d[i] is theId of the message 
-                        processTraceTransaction(traceMessages[d[i]]);
-                    }
-                    if (!traceMessages[d[i]].processed) {
-                        processTraceTransaction(traceMessages[d[i]]);
-                    }
-                }
-                if (d.length >= 20 || ((new Date() - config.debugStart) > 10 * 60 * 1000)) {
-                    config.debugSessionId = uuid();
-                    processDebugSession();
-                    return;
-                } else {
-                    processTraceTransactions();
-                }
+            data += d;
+        });
+        res.on("end", function() {
+            if (isJson(data)) {
+                processTransactionPayload(data);
             } else {
                 print("error in the the response - JSON not found");
-                print(d);
+                print(data);
             }
-
         });
     });
 
@@ -451,6 +459,18 @@ function processTraceTransactions() {
         console.error(e);
     });
     req.end();
+}
+
+function buildAuth() {
+    var user = process.env.Apigee_User,
+        secret = process.env.Apigee_Secret;
+    if (!user || !secret) {
+        var errMsg = "no authorization provided and no env variable(s) for Apigee_User and/or Apigee_Secret";
+        print(errMsg);
+        print(process.env);
+        throw new Error(errMsg);
+    }
+    return ("Basic " + (new Buffer(user + ":" + secret)).toString("base64"));
 }
 
 var summarize = function(aConfig) {
@@ -480,18 +500,6 @@ var summarize = function(aConfig) {
         print(stack);
     }
 };
-
-function buildAuth() {
-    var user = process.env.Apigee_User,
-        secret = process.env.Apigee_Secret;
-    if (!user || !secret) {
-        var errMsg = "no authorization provided and no env variable(s) for Apigee_User and/or Apigee_Secret";
-        print(errMsg);
-        print(process.env);
-        throw new Error(errMsg);
-    }
-    return ("Basic " + (new Buffer(user + ":" + secret)).toString("base64"));
-}
 
 function isMessageStart(point) {
     var result = false;
