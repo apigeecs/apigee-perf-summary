@@ -85,8 +85,9 @@ function policyTypeStats(tr) {
                     result[p.type].count++;
                     result[p.type].totalExecutionDurationMs += p.executionDurationMs;
                     result[p.type].averageExecutionDurationMs = result[p.type].totalExecutionDurationMs / result[p.type].count;
-                    if (p.executionDurationMs < result[p.type].min) { 
-                        result[p.type].min = p.executionDurationMs; }
+                    if (p.executionDurationMs < result[p.type].min) {
+                        result[p.type].min = p.executionDurationMs;
+                    }
                     if (p.executionDurationMs > result[p.type].max) {
                         result[p.type].max = p.executionDurationMs;
                     }
@@ -105,9 +106,11 @@ function policyNameStats(tr) {
         tr.traceFiles.forEach(function(tf) {
             tf.requests.forEach(function(req) {
                 req.policies.forEach(function(p) {
-                    if (!stats[p.name]) {stats[p.name] = new Stats({
-                                            bucket_precision: 10
-                                        });}
+                    if (!stats[p.name]) {
+                        stats[p.name] = new Stats({
+                            bucket_precision: 10
+                        });
+                    }
                     if (config.includeDisabled || p.enabled) {
                         stats[p.name].push(p.executionDurationMs);
                     }
@@ -324,7 +327,7 @@ function processTraceTransaction(trans) {
                 processXMLTraceString(id, data);
                 trans.processed = true;
             } else {
-                if (config.debug) {print("ignoring " + JSON.stringify(trans) + " will retry later.");}
+                if (config.debug) { print("ignoring " + JSON.stringify(trans) + " will retry later."); }
             }
         });
 
@@ -791,7 +794,7 @@ function processXMLTraceStream(id, stream) {
         xml.on("endElement: Point", function(point) {
             try {
                 if (isMessageStart(point)) {
-                    if (traceResponse.curTraceFile[id].curMessage) {traceResponse.curTraceFile[id].requests.push(traceResponse.curTraceFile[id].curMessage);}
+                    if (traceResponse.curTraceFile[id].curMessage) { traceResponse.curTraceFile[id].requests.push(traceResponse.curTraceFile[id].curMessage); }
                     traceResponse.curTraceFile[id].curMessage = getMessage(point);
                 } else if (isTargetReqStart(point)) {
                     traceResponse.curTraceFile[id].curMessage.target = getTargetReqStart(point);
@@ -813,17 +816,17 @@ function processXMLTraceStream(id, stream) {
                 } else if (isFlowChange(point)) {
                     //print("in isFlowChange");
                 } else if (isExecution(point)) {
-                    if (!traceResponse.curTraceFile[id].curMessage.policies) traceResponse.curTraceFile[id].curMessage.policies = [];
+                    if (!traceResponse.curTraceFile[id].curMessage.policies) { traceResponse.curTraceFile[id].curMessage.policies = []; }
                     traceResponse.curTraceFile[id].curMessage.policies.push(getExecution(point, prevStop));
                 }
-                if (point.DebugInfo && point.DebugInfo.Timestamp) {prevStop = point.DebugInfo.Timestamp.$text;}
+                if (point.DebugInfo && point.DebugInfo.Timestamp) { prevStop = point.DebugInfo.Timestamp.$text; }
             } catch (e) {
                 var stack = getStackTrace(e);
             }
         });
 
         xml.on("end", function() {
-            if (traceResponse.curTraceFile[id].curMessage) {traceResponse.curTraceFile[id].requests.push(traceResponse.curTraceFile[id].curMessage);}
+            if (traceResponse.curTraceFile[id].curMessage) { traceResponse.curTraceFile[id].requests.push(traceResponse.curTraceFile[id].curMessage); }
             delete traceResponse.curTraceFile[id].curMessage;
 
             //if (config.debug) print(file + "=\n" + JSON.stringify(traceResponse.curTraceFile[file]));
@@ -853,8 +856,7 @@ function processXMLTraceFile(file) {
 
 function processXMLTraceFiles(config) {
     var files;
-    if (fs.statSync(config.traceFile).isDirectory()) {files = getFiles(config.traceFile);}
-    else {files = [config.traceFile];}
+    if (fs.statSync(config.traceFile).isDirectory()) { files = getFiles(config.traceFile); } else { files = [config.traceFile]; }
     files.forEach(function(file) {
         processXMLTraceFile(file);
     });
@@ -875,7 +877,7 @@ function processXMLTraceString(id, str) {
 }
 
 function interval(func, wait, times) {
-    var interv = function(w, t) {
+    var interv = (function(w, t) {
         return function() {
             if (typeof t === "undefined" || t-- > 0) {
                 setTimeout(interv, w);
@@ -887,11 +889,11 @@ function interval(func, wait, times) {
                 }
             }
         };
-    }(wait, times);
+    }(wait, times));
 
     setTimeout(interv, wait);
 }
 
 module.exports = {
-    summarize: summarize
+    "summarize": summarize
 };
