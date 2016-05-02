@@ -435,11 +435,6 @@ function processDebugSession() {
         }
         res.on("data", function(d) {
             d = JSON.parse(d);
-            if (!d.name) {
-                print(d);
-                print(path);
-                throw new Error(d);
-            }
             config.debugSessionId = d.name;
             config.debugStart = new Date();
             //now we want to call the retrieval loop
@@ -448,8 +443,8 @@ function processDebugSession() {
     });
 
     req.on("error", function(e) {
-        print("error in the https call");
         console.error(e);
+        console.error("error in creating a debug session with " + JSON.stringify(options));
     });
     req.end();
 }
