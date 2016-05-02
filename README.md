@@ -1,6 +1,8 @@
 apigee-perf-summary
 ===================
 
+[![Codacy Badge](https://api.codacy.com/project/badge/Grade/7aa88006f019454c84eec8b85d06a92e)](https://www.codacy.com/app/dallen/apigee-perf-summary?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=apigeecs/apigee-perf-summary&amp;utm_campaign=Badge_Grade)
+
 A  library providing utility methods to support the offline analysis of trace files to determine relative performance aspects of proxies focused primarily on policy execution.
 
 A future version will include analysis of target calls as well.
@@ -86,8 +88,10 @@ Remote sessions may be initiated by supplying connection information including t
 	    includeDisabled: false
 	});
 
+Note that remote sessions capture a percentage of traffic - it is not capable of nore intended to capture all traffic in a given run. Consider it as sampling as much as 90% or as low as 60% of traffic depending on the speed of your local machine, local network, and rate of traffic in your proxy.
 
-Output is transitioning to a tabular format, which is readable to humans
+
+Output is now available in a tabular format, which is readable to humans
 
     .-------------------------------------------------.
     |            Policy Statistics by Name            |
