@@ -113,6 +113,10 @@ You will find sample trace files in the trace-files folder and a sample config i
 
 Think twice about putting trace files into a repository. We include them in our sample as a means of demonstrating the framework, but consider that tracefiles may have a wealth of implementation details including API keys, target credentials, and the like. 
 
+## Installtion Issue on Windows
+
+node-gyp rebuild errors are typicall resolvable by visiting https://www.robertkehoe.com/2015/03/fix-node-gyp-rebuild-error-on-windows/
+
 ## Contributing
 
 In lieu of a formal style guide, take care to maintain the existing coding style.
