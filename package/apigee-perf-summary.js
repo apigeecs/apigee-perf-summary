@@ -27,6 +27,12 @@ function print(msg) {
     }
 }
 
+function debugPrint(msg) {
+    if (config.debug) {
+        print(msg);
+    }
+}
+
 function getStackTrace(e) {
     return e.stack.replace(/^[^\(]+?[\n$]/gm, "")
         .replace(/^\s+at\s+/gm, "")
@@ -102,6 +108,26 @@ function policyTypeStats(tr) {
     return cleanupStats(result);
 }
 
+function outputPolciyTypeStats(policytypestats) {
+    var table = new AsciiTable("Policy Statistics by Type");
+
+    // this data are calculated, and is guaranteed to be this list (I hope)
+    table.setHeading("policy type", "count", "min", "max", "avg");
+
+    // this is the data package values in the order I want to display them
+    var dataOrder = ["count", "min", "max", "averageExecutionDurationMs"];
+
+    _.forEach(policytypestats, function(stats, policy) {
+        var dataDisplay = [policy];
+        _.forEach(dataOrder, function(dataItem) {
+            dataDisplay.push(stats[dataItem]);
+        });
+        table.addRow(dataDisplay);
+    });
+
+    print(table.toString());
+}
+
 function policyNameStats(tr) {
     var result = {};
     var stats = {};
@@ -137,7 +163,6 @@ function policyNameStats(tr) {
             "executionσ": stats.σ().toFixed(2)
         };
     });
-
     return cleanupStats(result);
 }
 
@@ -262,35 +287,61 @@ function targets(tr) {
     return result;
 }
 
+function finishFileCount(all) {
+    if (all || config.output.indexOf("fileCount") > -1) {
+        print("processed " + traceResponse.traceFiles.length + " files/messages.");
+    }
+}
+
+function finishPolicyCount(all) {
+    if (all || config.output.indexOf("policyCount") > -1) {
+        print("number of policies: " + policyCount(traceResponse));
+    }
+}
+
+function finishPolicyTypeStats(all) {
+    if (all || config.output.indexOf("policyTypeStats") > -1) {
+        outputPolciyTypeStats(policyTypeStats(traceResponse));
+    }
+}
+
+function finishPolicyNameStats(all) {
+    if (all || config.output.indexOf("policyNameStats") > -1) {
+        outputPolciyNameStats(policyNameStats(traceResponse));
+    }
+}
+
+function finishTraceDetails(all) {
+    if (all || config.output.indexOf("traceDetails") > -1) {
+        //print("trace details: " + JSON.stringify(traceResponse));
+        outputTraceDetails(traceResponse);
+    }
+}
+
+function finishTargets(all) {
+    if (all || config.output.indexOf("targets") > -1) {
+        print("targets: " + JSON.stringify(targets(traceResponse)));
+    }
+}
+
+function finishAll(all) {
+    if (all) {
+        print(JSON.stringify(traceResponse));
+    }
+}
+
 function finish() {
     var ct = countKeys(traceResponse.curTraceFile);
     if (ct === 0) {
         //handle post processing
         var all = (config.output.indexOf("all") > -1);
-
-        if (all || config.output.indexOf("fileCount") > -1) {
-            print("processed " + traceResponse.traceFiles.length + " files/messages.");
-        }
-        if (all || config.output.indexOf("policyCount") > -1) {
-            print("number of policies: " + policyCount(traceResponse));
-        }
-        if (all || config.output.indexOf("policyTypeStats") > -1) {
-            print("statistics by policy type: " + JSON.stringify(policyTypeStats(traceResponse)));
-        }
-        if (all || config.output.indexOf("policyNameStats") > -1) {
-            outputPolciyNameStats(policyNameStats(traceResponse));
-        }
-        if (all || config.output.indexOf("traceDetails") > -1) {
-            //print("trace details: " + JSON.stringify(traceResponse));
-            outputTraceDetails(traceResponse);
-        }
-        if (all || config.output.indexOf("targets") > -1) {
-            print("targets: " + JSON.stringify(targets(traceResponse)));
-        }
-
-        if (all || config.output.indexOf("all") > -1) {
-            print(JSON.stringify(traceResponse));
-        }
+        finishFileCount(all);
+        finishPolicyCount(all);
+        finishPolicyTypeStats(all);
+        finishPolicyNameStats(all);
+        finishTraceDetails(all);
+        finishTargets(all);
+        finishAll(all);
     }
 }
 
@@ -335,9 +386,7 @@ function processTraceTransaction(trans) {
                 processXMLTraceString(id, data);
                 trans.processed = true;
             } else {
-                if (config.debug) {
-                    print("ignoring " + JSON.stringify(trans) + " will retry later.");
-                }
+                debugPrint("ignoring " + JSON.stringify(trans) + " will retry later.");
                 trans.inProcess = false;
             }
         });
@@ -429,21 +478,12 @@ function processTransactionPayload(str) {
         config.debugSessionId = uuid();
         processDebugSession();
     } else {
-
-        //d contains an array of transactions identities
-        //we want to work backwards through the result
-        //if the transaction id isn"t in our transactions array
-        //then we want to add it to our array
-        //then call processTransaction on it
-
         for (var i = d.length; i-- > 0;) {
-            if (!traceMessages[d[i]]) {
-                traceMessages[d[i]] = {
-                    id: d[i],
-                    processed: false,
-                    inProcess: false
-                };
-            }
+            traceMessages[d[i]] = traceMessages[d[i]] || {
+                id: d[i],
+                processed: false,
+                inProcess: false
+            };
         }
         processTraceMessages();
         processTraceTransactions();
@@ -505,20 +545,12 @@ var summarize = function(aConfig) {
     config = aConfig;
     try {
         if (config.traceFile) {
-            if (config.debug) {
-                print("loading xml tracefile");
-            }
+            debugPrint("loading xml tracefile");
             processXMLTraceFiles(config);
         } else {
-            if (config.debug) {
-                print("loading live trace data");
-            }
-            if (!config.debugSessionId) {
-                config.debugSessionId = uuid();
-            }
-            if (!config.auth) {
-                config.auth = buildAuth();
-            }
+            debugPrint("loading live trace data");
+            config.debugSessionId = config.debugSessionId || uuid();
+            config.auth = config.auth || buildAuth();
             processDebugSession();
         }
     } catch (e) {
