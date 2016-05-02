@@ -46,12 +46,21 @@ function cleanupStats(result) {
                     hasMaxThreshold = ("omitMaxThreshold" in config);
 
                 //overly expressive for clarity sake
-                if (hasAvgThreshold && result[key].averageExecutionDurationMs >= config.omitAvgThreshold) { overAvgThreshold = true; }
-                if (hasAvgThreshold && result[key].max >= config.omitMaxThreshold) { overAvgThreshold = true; }
-                if (hasAvgThreshold && hasMaxThreshold && (overAvgThreshold || overMaxThreshold)) { deleteKey = false; }
-                if (hasAvgThreshold && !hasMaxThreshold && overAvgThreshold) { deleteKey = false; }
-                if (!hasAvgThreshold && hasMaxThreshold && overMaxThreshold) { deleteKey = false; }
-
+                if (hasAvgThreshold && result[key].averageExecutionDurationMs >= config.omitAvgThreshold) {
+                    overAvgThreshold = true;
+                }
+                if (hasAvgThreshold && result[key].max >= config.omitMaxThreshold) {
+                    overAvgThreshold = true;
+                }
+                if (hasAvgThreshold && hasMaxThreshold && (overAvgThreshold || overMaxThreshold)) {
+                    deleteKey = false;
+                }
+                if (hasAvgThreshold && !hasMaxThreshold && overAvgThreshold) {
+                    deleteKey = false;
+                }
+                if (!hasAvgThreshold && hasMaxThreshold && overMaxThreshold) {
+                    deleteKey = false;
+                }
                 if (deleteKey) {
                     delete result[key];
                 } else {
@@ -325,9 +334,11 @@ function processTraceTransaction(trans) {
                 trans.inProcess = true;
                 processXMLTraceString(id, data);
                 trans.processed = true;
-                trans.inProces = false;
             } else {
-                if (config.debug) { print("ignoring " + JSON.stringify(trans) + " will retry later."); }
+                if (config.debug) {
+                    print("ignoring " + JSON.stringify(trans) + " will retry later.");
+                }
+                trans.inProcess = false;
             }
         });
     });
@@ -370,6 +381,9 @@ function processDebugSession() {
 
     var req = https.request(options, function(res) {
         res.setEncoding("utf8");
+        if (res.statusCode >= 300) {
+            console.error(res.statusCode + ": " + res.statusMessage + " with " + JSON.stringify(options));
+        }
         res.on("data", function(d) {
             d = JSON.parse(d);
             if (!d.name) {
@@ -391,28 +405,47 @@ function processDebugSession() {
     req.end();
 }
 
-function processTransactionPayload(str) {
-    var d = JSON.parse(str);
-    //d contains an array of transactions identities
-    //we want to work backwards through the result
-    //if the transaction id isn"t in our transactions array
-    //then we want to add it to our array
-    //then call processTransaction on it
-    for (var i = d.length; i-- > 0;) {
-        traceMessages[d[i]] = traceMessages[d[i]] || {
-            id: d[i],
-            processed: false,
-            inProcess: false
-        };
-        if (!traceMessages[d[i]].processed && !traceMessages[d[i]].inProcess) {
-            processTraceTransaction(traceMessages[d[i]]);
+function processTraceMessages() {
+    for (var id in traceMessages) {
+        if ({}.hasOwnProperty.call(traceMessages, id)) {
+            if (!traceMessages[id].processed && !traceMessages[id].inProcess) {
+                traceMessages[id].inProcess = true;
+                processTraceTransaction(traceMessages[id]);
+
+            }
         }
     }
-    if (d.length >= 20 || ((new Date() - config.debugStart) > 10 * 60 * 1000)) {
+}
+
+function processTransactionPayload(str) {
+    var d = JSON.parse(str);
+    /*"{
+            "code" : "distribution.DebugSessionNotFound",
+            "message" : "DebugSession bdbfa0a5-3dc3-4971-edfb-25a277f5d7bd not found",
+            "contexts" : [ ]
+    }"*/
+
+    if (d.code === "distribution.DebugSessionNotFound" || d.length >= 20 || ((new Date() - config.debugStart) > 10 * 60 * 1000)) {
         config.debugSessionId = uuid();
         processDebugSession();
-        return;
     } else {
+
+        //d contains an array of transactions identities
+        //we want to work backwards through the result
+        //if the transaction id isn"t in our transactions array
+        //then we want to add it to our array
+        //then call processTransaction on it
+
+        for (var i = d.length; i-- > 0;) {
+            if (!traceMessages[d[i]]) {
+                traceMessages[d[i]] = {
+                    id: d[i],
+                    processed: false,
+                    inProcess: false
+                };
+            }
+        }
+        processTraceMessages();
         processTraceTransactions();
     }
 }
@@ -795,7 +828,9 @@ function processXMLTraceStream(id, stream) {
         xml.on("endElement: Point", function(point) {
             try {
                 if (isMessageStart(point)) {
-                    if (traceResponse.curTraceFile[id].curMessage) { traceResponse.curTraceFile[id].requests.push(traceResponse.curTraceFile[id].curMessage); }
+                    if (traceResponse.curTraceFile[id].curMessage) {
+                        traceResponse.curTraceFile[id].requests.push(traceResponse.curTraceFile[id].curMessage);
+                    }
                     traceResponse.curTraceFile[id].curMessage = getMessage(point);
                 } else if (isTargetReqStart(point)) {
                     traceResponse.curTraceFile[id].curMessage.target = getTargetReqStart(point);
@@ -817,10 +852,14 @@ function processXMLTraceStream(id, stream) {
                 } else if (isFlowChange(point)) {
                     //print("in isFlowChange");
                 } else if (isExecution(point)) {
-                    if (!traceResponse.curTraceFile[id].curMessage.policies) { traceResponse.curTraceFile[id].curMessage.policies = []; }
+                    if (!traceResponse.curTraceFile[id].curMessage.policies) {
+                        traceResponse.curTraceFile[id].curMessage.policies = [];
+                    }
                     traceResponse.curTraceFile[id].curMessage.policies.push(getExecution(point, prevStop));
                 }
-                if (point.DebugInfo && point.DebugInfo.Timestamp) { prevStop = point.DebugInfo.Timestamp.$text; }
+                if (point.DebugInfo && point.DebugInfo.Timestamp) {
+                    prevStop = point.DebugInfo.Timestamp.$text;
+                }
             } catch (e) {
                 var stack = getStackTrace(e);
                 print("error:");
@@ -830,11 +869,10 @@ function processXMLTraceStream(id, stream) {
         });
 
         xml.on("end", function() {
-            if (traceResponse.curTraceFile[id].curMessage) { traceResponse.curTraceFile[id].requests.push(traceResponse.curTraceFile[id].curMessage); }
+            if (traceResponse.curTraceFile[id].curMessage) {
+                traceResponse.curTraceFile[id].requests.push(traceResponse.curTraceFile[id].curMessage);
+            }
             delete traceResponse.curTraceFile[id].curMessage;
-
-            //if (config.debug) print(file + "=\n" + JSON.stringify(traceResponse.curTraceFile[file]));
-
             traceResponse.traceFiles.push(traceResponse.curTraceFile[id]);
             delete(traceResponse.curTraceFile[id]);
             finish();
@@ -859,7 +897,11 @@ function processXMLTraceFile(file) {
 
 function processXMLTraceFiles(config) {
     var files;
-    if (fs.statSync(config.traceFile).isDirectory()) { files = getFiles(config.traceFile); } else { files = [config.traceFile]; }
+    if (fs.statSync(config.traceFile).isDirectory()) {
+        files = getFiles(config.traceFile);
+    } else {
+        files = [config.traceFile];
+    }
     files.forEach(function(file) {
         processXMLTraceFile(file);
     });
