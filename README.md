@@ -88,7 +88,11 @@ Remote sessions may be initiated by supplying connection information including t
 	    includeDisabled: false
 	});
 
-Note that remote sessions capture a percentage of traffic - it is not capable of nore intended to capture all traffic in a given run. Consider it as sampling as much as 90% or as low as 60% of traffic depending on the speed of your local machine, local network, and rate of traffic in your proxy.
+When running against a remote session you can provide a directory for storing the retrieved trace messages for later analysis/review by adding an element to the execution configuration as in:
+	
+	traceFileCapture: "./capturedTraceFiles"
+
+Note that remote sessions capture a percentage of traffic - it is not capable of nor intended to capture all traffic in a given run. Consider it as sampling as much as 90% or as low as 60% of traffic depending on the speed of your local machine, local network, and rate of traffic in your proxy.
 
 
 Output is now available in a tabular format, which is readable to humans
