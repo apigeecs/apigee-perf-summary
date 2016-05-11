@@ -7,8 +7,6 @@ var XmlStream = require("xml-stream"),
     fs = require("fs"),
     Stream = require("stream"),
     https = require("https"),
-    path = require('path'),
-
     traceResponse = {
         "traceFiles": [],
         "curTraceFile": {}
@@ -362,6 +360,32 @@ function getFiles(dir, files_) {
     return files_;
 }
 
+var mkdirSync = function(path) {
+    try {
+        fs.existsSync(path) || fs.mkdirSync(path);
+    } catch (e) {
+        if (e.code !== "EEXIST") {throw e;}
+    }
+}
+
+var mkdirpSync = function(dirpath) {
+    var parts = dirpath.split(path.sep);
+    for (var i = 1; i <= parts.length; i++) {
+        mkdirSync(path.join.apply(null, parts.slice(0, i)));
+    }
+}
+
+function writeTraceFile(id, data) {
+    //file exists? If not create
+    //append to it
+    if (config.traceFileCapture) {
+        fs.existsSync(config.traceFileCapture) || mkdirpSync(config.traceFileCapture);
+        fs.writeFile(config.traceFileCapture + "/" + id + ".xml", data, function(err) {
+            if (err) { console.error(err); }
+        });
+    }
+}
+
 function processTraceTransaction(trans) {
     var data = "",
         id = trans.id;
@@ -401,33 +425,6 @@ function processTraceTransaction(trans) {
     });
     req.end();
 
-}
-
-function writeTraceFile(id, data) {
-    //file exists? If not create
-    //append to it
-    if (config.traceFileCapture) {
-        fs.existsSync(config.traceFileCapture) || mkdirpSync(config.traceFileCapture);
-        fs.writeFile(config.traceFileCapture + "/" + id + ".xml", data, function(err) {
-            if (err) { console.error(err); }
-        });
-    }
-}
-
-var mkdirSync = function(path) {
-    try {
-        fs.existsSync(path) || fs.mkdirSync(path);
-    } catch (e) {
-        if (e.code != 'EEXIST') throw e;
-    }
-}
-
-var mkdirpSync = function(dirpath) {
-    debugger;
-    var parts = dirpath.split(path.sep);
-    for (var i = 1; i <= parts.length; i++) {
-        mkdirSync(path.join.apply(null, parts.slice(0, i)));
-    }
 }
 
 function uuid() {
