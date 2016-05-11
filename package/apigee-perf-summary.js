@@ -360,15 +360,16 @@ function getFiles(dir, files_) {
     return files_;
 }
 
-var mkdirSync = function(path) {
+function mkdirSync(path) {
     try {
         fs.existsSync(path) || fs.mkdirSync(path);
     } catch (e) {
-        if (e.code !== "EEXIST") {throw e;}
+        if (e.code !== "EEXIST") {
+            throw e; }
     }
 }
 
-var mkdirpSync = function(dirpath) {
+function mkdirpSync(dirpath) {
     var parts = dirpath.split(path.sep);
     for (var i = 1; i <= parts.length; i++) {
         mkdirSync(path.join.apply(null, parts.slice(0, i)));
